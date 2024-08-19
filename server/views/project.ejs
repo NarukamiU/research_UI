@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= projectName %></title>
+  <link rel="stylesheet" href="/styles/project.css">
+</head>
+<body>
+  <div class="sidebar">
+    <div class="hamburger-menu" id="hamburgerMenu">
+      ☰
+    </div>
+    <h2 id="projectLink" class="active"><%= projectName %></h2>
+    <div class="info">info</div>
+
+     <!-- ハンバーガーメニューの内容 -->
+     <div class="menu" id="menu">
+      <ul>
+          <li>👤 Guest</li>
+          <hr>
+          <li id="newProjectMenu">➕ NewProject
+              <ul class="submenu" id="submenu">
+                  <li>📁 CreateProject</li>
+                  <li>📂 ImportProject</li>
+                  <li>🔗 ShareProject</li>
+              </ul>
+          </li>
+          <li>🧊 Type</li>
+          <li>⬆️ Upload</li>
+          <li>🔄 Export</li>
+          <hr>
+          <li>⋮</li>
+          <hr>
+          <li>👥 Login</li>
+          <li>👋 Logout</li>
+          <hr>
+          <li id="homeLink">🏠 HOME</li>
+      </ul>
+  </div>
+
+  </div>
+
+  <div class="content" id="projectContent">
+    <!-- 画像一覧 -->
+    <div class="image-list">
+      <div class="image-list-header">
+        <span class="image-list-title">ALL (<%= images.length %> images)</span>
+        <!--button class="sort-button">Sort</button-->
+      </div>
+      <div class="image-grid" id="imageGrid">
+        <% labels.forEach(label => { %>
+          <div class="label-container" data-label-id="<%= label.id %>">
+            <h3 class="label-name"><%= label.name %> (<%= label.count %> images)</h3>
+            <button class="label-delete-button" data-label-name="<%= label.name %>" data-project-name="<%= projectName %>">Label Delete</button>
+            <div class="image-grid-inner">
+              <% images.filter(image => image.label === label.name).forEach(image => { %>
+                <div class="image-card" data-image-name="<%= image.name %>" data-label-name="<%= label.name %>">
+                  <span class="image-label"><%= label.name %></span> <div class="image-placeholder"></div>
+                  <span class="image-name"><%= image.name %></span>
+                  <button class="delete-button" data-image-name="<%= image.name %>" data-label-name="<%= label.name %>">Delete</button>
+                </div>
+              <% }); %>
+              <div class="upload-button" data-label-id="<%= label.id %>" data-project-name="<%= projectName %>">+</div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+
+    <!-- ラベル追加 -->
+    <div class="add-label-container">
+      <button id="addLabelButton">⊕ Add Label</button>
+      <div class="add-label-form" style="display: none;">
+        <input type="text" id="newLabelName" placeholder="ラベル名を入力">
+        <button id="createNewLabelButton">作成</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/scripts/project.js"></script>
+</body>
+</html>

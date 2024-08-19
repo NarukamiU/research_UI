@@ -1,0 +1,203 @@
+/* 全体的なスタイル */
+body {
+  font-family: sans-serif;
+}
+
+/* ディレクトリツリーのスタイル */
+#directory-tree ul {
+  list-style: none;
+  padding: 0;
+}
+
+#directory-tree li {
+  margin-bottom: 5px;
+  display: flex; /* アイコンとテキストを横に並べる */
+  align-items: center;
+}
+
+#directory-tree li.active { /* 現在ディレクトリを強調表示 */
+font-weight: bold;
+}
+
+/* ドロップ領域のスタイル */
+#drop-area {
+  width: 300px;
+  height: 100px;
+  border: 2px dashed #ccc;
+  text-align: center;
+  line-height: 100px;
+  margin: 20px auto;
+}
+
+#drop-area.hover {
+  border-color: #333;
+}
+
+/* 現在ディレクトリ表示 */
+#current-directory {
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+
+/* 矢印ボタン */
+.arrow-button {
+background-color: #eee;
+border: none;
+padding: 5px 10px;
+cursor: pointer;
+}
+
+.arrow-button:hover {
+background-color: #ddd;
+}
+
+/* 画像ギャラリー */
+#image-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+#image-gallery img {
+  width: 200px;
+  height: 150px;
+  margin: 10px;
+  object-fit: cover; /* 画像を枠内に収まるように調整 */
+}
+
+#image-gallery .image-info {
+  text-align: center;
+  margin-top: 5px;
+}
+
+/* フォルダ作成 */
+#create-directory {
+  margin-top: 20px;
+}
+
+#create-directory input[type="text"] {
+  padding: 5px;
+  margin-right: 10px;
+}
+
+#create-directory button {
+  padding: 5px 10px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+#create-directory button:hover {
+  background-color: #45a049;
+}
+
+/* フォルダ削除 */
+#delete-directory {
+  margin-top: 20px;
+}
+
+#delete-directory input[type="text"] {
+  padding: 5px;
+  margin-right: 10px;
+}
+
+#delete-directory button {
+  padding: 5px 10px;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+#delete-directory button:hover {
+  background-color: #d32f2f;
+}
+
+/* フォルダリネーム */
+#rename-directory {
+  margin-top: 20px;
+}
+
+#rename-directory input[type="text"] {
+  padding: 5px;
+  margin-right: 10px;
+}
+
+#rename-directory button {
+  padding: 5px 10px;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+#rename-directory button:hover {
+  background-color: #1976D2;
+}
+
+/* アイコン */
+.icon {
+margin-right: 5px;
+width: 20px;
+height: 20px;
+}
+
+.file-icon {
+background-image: url('https://cdn-icons-png.flaticon.com/512/739/739249.png'); /* 画像アイコンのURL */
+background-size: cover;
+}
+
+.folder-icon {
+background-image: url('https://cdn-icons-png.flaticon.com/512/1383/1383970.png '); /* フォルダアイコンのURL */
+background-size: cover;
+}
+
+/* 三点リーダーボタン */
+.options-button {
+  position: relative;
+  top: -10px;
+  right: -10px;
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* DELETEボタン */
+.delete-button {
+  background-color: red;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  margin-left: 5px;
+  cursor: pointer;
+}
+
+/* 画像ギャラリーの画像 */
+.gallery-image {
+  position: relative; /* 子要素の絶対配置を可能にする */
+}
+
+/* 移動ディレクトリ */
+#move-directory {
+  margin-top: 20px;
+}
+
+#move-directory input[type="text"] {
+  padding: 5px;
+  margin-right: 10px;
+}
+
+#move-directory button {
+  padding: 5px 10px;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+#move-directory button:hover {
+  background-color: #1976D2;
+}

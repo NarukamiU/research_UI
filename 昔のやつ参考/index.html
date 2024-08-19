@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ファイル管理システム</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>ファイル管理システム</h1>
+
+    <div id="current-directory">
+        <!-- 現在ディレクトリ表示領域 -->
+    </div>
+
+    <div id="directory-tree">
+        <!-- ディレクトリツリー表示領域 -->
+    </div>
+
+    <div id="create-directory">
+        <input type="text" id="directory-name" placeholder="フォルダ名を入力">
+        <button id="create-directory-button">フォルダを作成</button>
+    </div>
+
+    <div id="delete-directory">
+        <input type="text" id="delete-directory-name" placeholder="削除するフォルダ名を入力">
+        <button id="delete-directory-button">フォルダを削除</button>
+    </div>
+
+    <div id="rename-directory">
+        <input type="text" id="rename-old-directory-name" placeholder="リネームするフォルダ名を入力">
+        <input type="text" id="rename-new-directory-name" placeholder="新しいフォルダ名を入力">
+        <button id="rename-directory-button">フォルダをリネーム</button>
+    </div>
+
+    <div id="move-directory">
+        <input type="text" id="move-source-file-name" placeholder="移動ファイル・フォルダ名を入力">
+        <input type="text" id="move-target-folder-name" placeholder="移動先フォルダ名を入力">
+        <button id="move-button">移動</button>
+    </div>
+
+    <div id="image-gallery">
+        <!-- 画像表示領域 -->
+    </div>
+
+    <div id="drop-area" data-path="">
+        <p>ここにファイルをドロップ</p>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
