@@ -49,22 +49,7 @@
         <!--button class="sort-button">Sort</button-->
       </div>
       <div class="image-grid" id="imageGrid">
-        <% labels.forEach(label => { %>
-          <div class="label-container" data-label-id="<%= label.id %>">
-            <h3 class="label-name"><%= label.name %> (<%= label.count %> images)</h3>
-            <button class="label-delete-button" data-label-name="<%= label.name %>" data-project-name="<%= projectName %>">Label Delete</button>
-            <div class="image-grid-inner">
-              <% images.filter(image => image.label === label.name).forEach(image => { %>
-                <div class="image-card" data-image-name="<%= image.name %>" data-label-name="<%= label.name %>">
-                  <span class="image-label"><%= label.name %></span> <div class="image-placeholder"></div>
-                  <span class="image-name"><%= image.name %></span>
-                  <button class="delete-button" data-image-name="<%= image.name %>" data-label-name="<%= label.name %>">Delete</button>
-                </div>
-              <% }); %>
-              <div class="upload-button" data-label-id="<%= label.id %>" data-project-name="<%= projectName %>">+</div>
-            </div>
-          </div>
-        <% }); %>
+        <!--ここにproject.jsのcreateLabelContainer関数でラベルごとに生成される。-->
       </div>
     </div>
 

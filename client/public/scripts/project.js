@@ -51,6 +51,9 @@ async function handleLabelDeleteClick(event) {
 
     // ラベルコンテナをDOMから削除
     labelContainer.remove();
+
+    // 画像総数を更新
+    updateImageCount();
   } catch (error) {
     handleError(error, 'ラベルの削除に失敗しました');
   }
@@ -73,11 +76,30 @@ async function handleDeleteButtonClick(event) {
           '画像の削除に失敗しました'
         );
         imageCard.remove();
+
+        // 削除した画像のラベルの画像数を更新
+        updateLabelImageCount(labelName);
       })
     );
+     // 画像総数を更新
+     updateImageCount();
   } catch (error) {
     handleError(error, '画像の削除に失敗しました');
   }
+}
+
+// 画像総数を更新する関数
+function updateImageCount() {
+  const imageListTitle = document.querySelector('.image-list-title');
+  const totalImages = document.querySelectorAll('.image-card').length;
+  imageListTitle.textContent = `ALL (${totalImages} images)`;
+}
+
+// ラベルの画像数を更新する関数
+function updateLabelImageCount(labelName) {
+  const labelNameElement = document.querySelector(`.label-container[data-label-id="${labelName}"] .label-name`);
+  const labelImages = document.querySelectorAll(`.image-card[data-label-name="${labelName}"]`).length;
+  labelNameElement.textContent = `${labelName} (${labelImages} images)`;
 }
 
 // ラベルをクリックした時のイベントリスナー
@@ -157,22 +179,33 @@ async function handleLabelItemClick(event) {
     await Promise.all(
       Array.from(selectedImageCards).map(async (imageCard) => {
         const { imageName, labelName: sourceLabel } = imageCard.dataset;
-        await moveImage(projectName, imageName, sourceLabel, targetLabel);
 
-        // 移動後のラベルを表示
-        imageCard.querySelector('.image-label').textContent = targetLabel;
-        imageCard.dataset.labelName = targetLabel; // data-label-name 属性も更新
+        // 移動先のラベルと画像の現在のラベルが異なる場合のみ移動処理を行う
+        if (sourceLabel !== targetLabel) { 
+          await moveImage(projectName, imageName, sourceLabel, targetLabel);
 
-        // 画像カードを新しいラベルコンテナに移動
-        const targetLabelContainer = document.querySelector(`.label-container[data-label-id="${targetLabel}"] .image-grid-inner`);
-        targetLabelContainer.appendChild(imageCard);
+          // 移動後のラベルを表示
+          const labelSpan = imageCard.querySelector('.image-label');
+          labelSpan.textContent = targetLabel;
+          labelSpan.style.display = 'none'; // ラベルを非表示にする
+          imageCard.dataset.labelName = targetLabel; // data-label-name 属性も更新
+
+          // 画像カードを新しいラベルコンテナに移動
+          const targetLabelContainer = document.querySelector(`.label-container[data-label-id="${targetLabel}"] .image-grid-inner`);
+          targetLabelContainer.appendChild(imageCard);
+        }
       })
     );
+
+    // ラベルリストコンテナを削除
+    const labelListContainer = document.querySelector('.label-list-container');
+    if (labelListContainer) {
+      labelListContainer.remove();
+    }
   } catch (error) {
     handleError(error, '画像の移動に失敗しました');
   }
 }
-
 // 画像を移動する関数
 async function moveImage(projectName, imageName, sourceLabel, targetLabel) {
   await sendRequest(
@@ -188,11 +221,6 @@ async function moveImage(projectName, imageName, sourceLabel, targetLabel) {
 function setupEventListeners() {
   document.querySelectorAll('.upload-button').forEach(button => {
     button.addEventListener('click', handleUploadButtonClick);
-  });
-
-  document.querySelectorAll('.image-grid-inner').forEach(grid => {
-    grid.addEventListener('dragover', (event) => event.preventDefault());
-    grid.addEventListener('drop', handleImageGridDrop);
   });
 
   document.querySelectorAll('.image-label').forEach(label => {
@@ -323,11 +351,17 @@ function setupImageHoverEvents() {
 
   // 画像カードのクリックイベントリスナー
   imageGrid.addEventListener('click', (event) => {
+     if (event.target.classList.contains('image-label')) {
+        event.stopPropagation();
+        return; // 以降の処理をスキップ
+      }
+  
     if (event.target.classList.contains('image-card')) {
       const imageCard = event.target;
       const imageName = imageCard.dataset.imageName;
       const deleteButton = imageCard.querySelector('.delete-button'); // Delete ボタンを取得
-
+      const labelSpan = imageCard.querySelector('.image-label'); // ラベルを取得
+  
       // Ctrlキーが押されている場合は複数選択
       if (event.ctrlKey) {
         if (selectedImages.has(imageName)) {
@@ -335,11 +369,13 @@ function setupImageHoverEvents() {
           selectedImages.delete(imageName);
           imageCard.classList.remove('selected');
           deleteButton.style.display = 'none'; // 選択解除時に Delete ボタンを非表示
+          labelSpan.style.display = 'none'; // 選択解除時にラベルを非表示
         } else {
           // 選択されていない場合は選択
           selectedImages.add(imageName);
           imageCard.classList.add('selected');
           deleteButton.style.display = 'block'; // 選択時に Delete ボタンを表示
+          labelSpan.style.display = 'block'; // 選択解除時にラベルを非表示
         }
       } else {
         // Ctrlキーが押されていない場合は単一選択
@@ -347,10 +383,12 @@ function setupImageHoverEvents() {
         document.querySelectorAll('.image-card').forEach(card => {
           card.classList.remove('selected');
           card.querySelector('.delete-button').style.display = 'none'; // すべての Delete ボタンを非表示
+          card.querySelector('.image-label').style.display = 'none'; // すべてのラベルを非表示
         });
         selectedImages.add(imageName);
         imageCard.classList.add('selected');
         deleteButton.style.display = 'block'; // 選択時に Delete ボタンを表示
+        labelSpan.style.display = 'block'; // 選択時にラベルを表示
       }
   
       console.log('選択された画像:', selectedImages); // 選択された画像の確認
@@ -363,15 +401,26 @@ function setupImageHoverEvents() {
       // 複数選択状態を解除
       selectedImages.forEach(imageName => {
         const imageCard = document.querySelector(`.image-card[data-image-name="${imageName}"]`);
+        const labelSpan = imageCard.querySelector('.image-label'); // ラベルを取得
         if (imageCard) {
           imageCard.classList.remove('selected');
           // Delete ボタンを非表示にする
           imageCard.querySelector('.delete-button').style.display = 'none'; 
+          labelSpan.style.display = 'none'; // 選択解除時にラベルを非表示
         }
       });
       selectedImages.clear();
     }
   });
+   // 画像カードの右クリックイベントリスナー
+   imageGrid.addEventListener('contextmenu', (event) => {
+    if (event.target.classList.contains('image-card')) {
+      event.preventDefault(); // 右クリックメニューの表示を抑制
+      const imageCard = event.target;
+      enlargeImage(imageCard); // imageCard を引数として渡す
+    }
+  });
+
   // 画像カード以外をクリックしたときのイベントリスナー
   document.addEventListener('click', (event) => {
     // クリックされた要素が画像カードでない場合
@@ -379,15 +428,43 @@ function setupImageHoverEvents() {
       // 複数選択状態を解除
       selectedImages.forEach(imageName => {
         const imageCard = document.querySelector(`.image-card[data-image-name="${imageName}"]`);
+        const labelSpan = imageCard.querySelector('.image-label'); // ラベルを取得
         if (imageCard) {
           imageCard.classList.remove('selected');
           // Delete ボタンを非表示にする
           imageCard.querySelector('.delete-button').style.display = 'none'; 
+          labelSpan.style.display = 'none'; // 選択解除時にラベルを非表示
         }
       });
       selectedImages.clear();
     }
   });
+}
+
+// 画像を拡大表示する関数
+async function enlargeImage(imageCard) {
+  const imageContainer = document.createElement('div');
+  imageContainer.classList.add('enlarged-image-container');
+
+  // 閉じるボタンを追加
+  const closeButton = document.createElement('button');
+  closeButton.classList.add('close-button');
+  closeButton.textContent = '×';
+  closeButton.addEventListener('click', () => {
+    imageContainer.remove();
+  });
+  imageContainer.appendChild(closeButton);
+
+  const imagePlaceholder = document.createElement('div');
+  imagePlaceholder.classList.add('enlarged-image-placeholder');
+  imageContainer.appendChild(imagePlaceholder);
+
+  // 画像カードから画像の src 属性を取得して拡大表示用のコンテナに設定
+  const imageSrc = imageCard.querySelector('img').src; 
+  imagePlaceholder.style.backgroundImage = `url(${imageSrc})`;
+
+  // body に画像コンテナを追加
+  document.body.appendChild(imageContainer);
 }
 
 // 各ラベルの画像を表示する関数
@@ -451,6 +528,7 @@ async function displayEachImages() {
                labelSpan.classList.add('image-label');
                labelSpan.textContent = label.name;
                labelSpan.addEventListener('click', handleLabelClick); // クリックイベントリスナーを追加
+               labelSpan.style.display = 'none'; // 初期状態では非表示
                imageCard.appendChild(labelSpan);
 
               // 画像名を表示するspan要素を追加
@@ -559,19 +637,19 @@ function createLabelContainer(labelName) {
   labelNameElement.textContent = labelName;
   labelContainer.appendChild(labelNameElement);
 
+   // 削除ボタン
+   const deleteButton = document.createElement('button');
+   deleteButton.classList.add('label-delete-button');
+   deleteButton.textContent = 'Label Delete';
+   deleteButton.dataset.projectName = document.getElementById("projectLink").textContent.trim();
+   deleteButton.dataset.labelName = labelName;
+   deleteButton.addEventListener('click', handleLabelDeleteClick);
+   labelContainer.appendChild(deleteButton);
+
   // 画像グリッドのコンテナ
   const imageGridInner = document.createElement('div');
   imageGridInner.classList.add('image-grid-inner');
   labelContainer.appendChild(imageGridInner);
-
-  // 削除ボタン
-  const deleteButton = document.createElement('button');
-  deleteButton.classList.add('label-delete-button');
-  deleteButton.textContent = 'Label Delete';
-  deleteButton.dataset.projectName = document.getElementById("projectLink").textContent.trim();
-  deleteButton.dataset.labelName = labelName;
-  deleteButton.addEventListener('click', handleLabelDeleteClick);
-  labelContainer.appendChild(deleteButton);
 
   // アップロードボタン
   const uploadButton = document.createElement('button');

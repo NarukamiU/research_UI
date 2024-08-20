@@ -4,7 +4,7 @@ const multer = require('multer');
 const fs = require('fs-extra'); 
 const path = require('path');
 const ejs = require('ejs'); // EJSをインポート
-
+const { v4: uuidv4 } = require('uuid'); 
 const app = express();
 const port = 3000;
 
@@ -26,7 +26,23 @@ const storage = multer.diskStorage({
     cb(null, file.originalname); // 元のファイル名を使用
   }
 });
-const upload = multer({ storage });
+
+const upload = multer({ 
+  storage: storage,
+  // ファイルタイプを制限する fileFilter オプションを追加
+  fileFilter: (req, file, cb) => {
+    // 許可する MIME タイプ
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif'];
+
+    // ファイルタイプが許可されている場合は cb(null, true) を呼び出す
+    if (allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      // 許可されていない場合はエラーメッセージを設定して cb(null, false) を呼び出す
+      cb(new Error('アップロードできるのは画像ファイルのみです。'), false);
+    }
+  } 
+});
 
 // CORSを許可するミドルウェアを追加
 app.use(cors({
@@ -70,21 +86,17 @@ app.post('/upload', upload.array('files', 10), async (req, res) => {
     await fs.ensureDir(path.join(uploadDir, req.body.path));
 
     // アップロードされたファイルの処理
-    const uploadedFiles = req.files.map(file => {
-      // ファイル名の重複チェック
-      const originalFilename = file.originalname;
-      let filename = originalFilename;
-      let counter = 1;
-      while (fs.existsSync(path.join(uploadDir, req.body.path, filename))) {
-        filename = `${originalFilename}-${counter++}`;
-      }
+    const uploadedFiles = await Promise.all(req.files.map(async (file) => {
+      // UUID を使用してファイル名を生成
+      const fileExtension = path.extname(file.originalname);
+      const filename = `${uuidv4()}${fileExtension}`;
 
       // ファイルを移動
       const destination = path.join(uploadDir, req.body.path, filename);
-      fs.moveSync(file.path, destination);
+      await fs.move(file.path, destination);
 
-      return { originalFilename, filename }; // 元のファイル名と新しいファイル名を返す
-    });
+      return { originalFilename: file.originalname, filename }; // 元のファイル名と新しいファイル名を返す
+    }));
 
     const projectName = req.body.path.split('/')[1]; // project名を取得
     res.json({ message: 'ファイルアップロード成功', filenames: uploadedFiles, projectName }); // projectName をレスポンスに追加
@@ -93,6 +105,7 @@ app.post('/upload', upload.array('files', 10), async (req, res) => {
     res.status(500).json({ error: 'ファイルアップロード失敗', details: err.message }); 
   }
 });
+
 
 // ディレクトリ一覧取得 API
 app.get('/directory', async (req, res) => {
