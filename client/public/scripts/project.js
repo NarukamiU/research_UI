@@ -467,100 +467,125 @@ async function enlargeImage(imageCard) {
   document.body.appendChild(imageContainer);
 }
 
+// サーバーからラベルリストを取得する関数
+async function fetchLabelList(projectName) {
+  const projectPath = `/projects/${projectName}`;
+  const response = await fetch(`http://localhost:3000/directory?path=${projectPath}`);
+  if (!response.ok) {
+    throw new Error('ラベルリストの取得に失敗しました');
+  }
+  return await response.json();
+}
+
+// 既存のラベルコンテナをクリアする関数
+function clearLabelContainers() {
+  const imageGrid = document.getElementById('imageGrid');
+  imageGrid.innerHTML = ''; // 既存のラベルを削除
+}
+
+// 新しいラベルコンテナを生成する関数
+function createLabelContainers(labelList) {
+  const imageGrid = document.getElementById('imageGrid');
+  labelList.forEach(label => {
+    if (label.isDirectory) {
+      const newLabelContainer = createLabelContainer(label.name);
+      imageGrid.appendChild(newLabelContainer);
+    }
+  });
+}
+
+// 指定されたラベルの画像を表示する関数
+async function displayImagesForLabel(label, projectPath) {
+  const response = await fetch(`http://localhost:3000/directory?path=${projectPath}/${label.name}`);
+  const imageList = await response.json();
+
+  const imageGridInner = document.querySelector(`.label-container[data-label-id="${label.name}"] .image-grid-inner`);
+
+  // すべての画像を並行処理で取得
+  await Promise.all(
+    imageList.filter(image => !image.isDirectory).map(async image => {
+      const imagePlaceholder = document.createElement('div');
+      imagePlaceholder.classList.add('image-placeholder');
+      const imageCard = document.createElement('div');
+      imageCard.classList.add('image-card');
+      imageCard.dataset.imageName = image.name;
+      imageCard.dataset.labelName = label.name;
+      imageCard.appendChild(imagePlaceholder);
+
+      // 画像を表示
+      await displayImage(projectPath, label.name, image.name, imagePlaceholder);
+
+      // 画像カードをimageGridInnerに追加
+      imageGridInner.appendChild(imageCard);
+
+      // 画像カードに削除ボタンを追加
+      const deleteButton = document.createElement('button');
+      deleteButton.classList.add('delete-button');
+      deleteButton.textContent = 'Delete';
+      deleteButton.dataset.imageName = image.name;
+      deleteButton.dataset.labelName = label.name;
+      deleteButton.addEventListener('click', handleDeleteButtonClick);
+      deleteButton.style.display = 'none'; // 初期表示状態を非表示に設定
+      imageCard.appendChild(deleteButton);
+
+      // 画像カードにラベル表示を追加
+      const labelSpan = document.createElement('span');
+      labelSpan.classList.add('image-label');
+      labelSpan.textContent = label.name;
+      labelSpan.addEventListener('click', handleLabelClick); // クリックイベントリスナーを追加
+      labelSpan.style.display = 'none'; // 初期状態では非表示
+      imageCard.appendChild(labelSpan);
+
+      // 画像名を表示するspan要素を追加
+      const imageNameSpan = document.createElement('span');
+      imageNameSpan.classList.add('image-name');
+      imageNameSpan.style.display = 'none'; // 初期表示は非表示
+      imageCard.appendChild(imageNameSpan);
+
+      // ホバーイベントリスナーを追加
+      imageCard.addEventListener('mouseover', (event) => {
+        imageNameSpan.textContent = image.name;
+        imageNameSpan.style.display = 'block';
+      });
+
+      imageCard.addEventListener('mouseout', (event) => {
+        imageNameSpan.style.display = 'none';
+      });
+    })
+  );
+}
+
 // 各ラベルの画像を表示する関数
 async function displayEachImages() {
   try {
     const projectName = document.getElementById("projectLink").textContent.trim();
     const projectPath = `/projects/${projectName}`;
-    const response = await fetch(`http://localhost:3000/directory?path=${projectPath}`);
-    const labelList = await response.json();
+
+    // ラベルリストを取得
+    const labelList = await fetchLabelList(projectName);
 
     // 既存のラベルコンテナをクリア
-    const imageGrid = document.getElementById('imageGrid');
-    imageGrid.innerHTML = ''; // 既存のラベルを削除
+    clearLabelContainers();
 
     // 新しいラベルコンテナを生成
-    labelList.forEach(label => {
-      if (label.isDirectory) {
-        const newLabelContainer = createLabelContainer(label.name);
-        imageGrid.appendChild(newLabelContainer);
-      }
-    });
+    createLabelContainers(labelList);
 
     // 各ラベルの画像を表示
     await Promise.all(
       labelList.map(async (label) => {
         if (label.isDirectory) {
-          const response = await fetch(`http://localhost:3000/directory?path=${projectPath}/${label.name}`);
-          const imageList = await response.json();
-
-          const imageGridInner = document.querySelector(`.label-container[data-label-id="${label.name}"] .image-grid-inner`);
-
-          // すべての画像を並行処理で取得
-          await Promise.all(
-            imageList.filter(image => !image.isDirectory).map(async image => {
-              const imagePlaceholder = document.createElement('div');
-              imagePlaceholder.classList.add('image-placeholder');
-              const imageCard = document.createElement('div');
-              imageCard.classList.add('image-card');
-              imageCard.dataset.imageName = image.name;
-              imageCard.dataset.labelName = label.name;
-              imageCard.appendChild(imagePlaceholder);
-
-              // 画像を表示
-              await displayImage(projectPath, label.name, image.name, imagePlaceholder);
-
-              // 画像カードをimageGridInnerに追加
-              imageGridInner.appendChild(imageCard);
-
-              // 画像カードに削除ボタンを追加
-              const deleteButton = document.createElement('button');
-              deleteButton.classList.add('delete-button');
-              deleteButton.textContent = 'Delete';
-              deleteButton.dataset.imageName = image.name;
-              deleteButton.dataset.labelName = label.name;
-              deleteButton.addEventListener('click', handleDeleteButtonClick);
-              deleteButton.style.display = 'none'; // 初期表示状態を非表示に設定
-              imageCard.appendChild(deleteButton);
-
-               // 画像カードにラベル表示を追加
-               const labelSpan = document.createElement('span');
-               labelSpan.classList.add('image-label');
-               labelSpan.textContent = label.name;
-               labelSpan.addEventListener('click', handleLabelClick); // クリックイベントリスナーを追加
-               labelSpan.style.display = 'none'; // 初期状態では非表示
-               imageCard.appendChild(labelSpan);
-
-              // 画像名を表示するspan要素を追加
-              const imageNameSpan = document.createElement('span');
-              imageNameSpan.classList.add('image-name');
-              imageNameSpan.style.display = 'none'; // 初期表示は非表示
-              imageCard.appendChild(imageNameSpan);
-
-              // ホバーイベントリスナーを追加
-              imageCard.addEventListener('mouseover', (event) => {
-                imageNameSpan.textContent = image.name;
-                imageNameSpan.style.display = 'block';
-              });
-
-              imageCard.addEventListener('mouseout', (event) => {
-                imageNameSpan.style.display = 'none';
-              });
-            })
-          );
-
-          // ラベルごとの画像数を表示
-          const labelNameElement = document.querySelector(`.label-container[data-label-id="${label.name}"] .label-name`);
-          labelNameElement.textContent = `${label.name} (${imageList.filter(image => !image.isDirectory).length}images)`;
+          await displayImagesForLabel(label, projectPath);
+          updateLabelImageCount(label.name); // ラベルごとの画像数を更新
         }
       })
     );
 
+    // 画像総数を更新
+    updateImageCount();
   } catch (error) {
     handleError(error, '画像一覧の取得に失敗しました');
   }
 }
-
 
 // 画像アップロード処理
 async function uploadImages(files, targetDirectory) {
