@@ -17,6 +17,10 @@ body {
   left: 0;
 }
 
+.sidebar .label-list .active {
+  color: white; /* アクティブなラベルの文字色を白に設定 */
+}
+
 .active {
   color: white;
 }
@@ -224,6 +228,19 @@ body {
   height: 100vh;
   box-sizing: border-box;
   position: fixed;
+}
+
+.sidebar .label-list {
+  margin-top: 20px;
+}
+
+.sidebar .label-list > div {
+  margin-bottom: 5px;
+}
+
+.sidebar .image-count {
+  font-size: 12px; /* 画像数のフォントサイズを小さくする */
+  color: gray; /* 画像数をグレーで表示する */
 }
 
 

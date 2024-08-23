@@ -6,7 +6,22 @@ async function init() {
   setupImageHoverEvents();
   await displayEachImages();
   setupEventListeners();
-};
+
+  // カスタムイベントリスナーを設定
+  document.addEventListener('image-data-changed', async () => {
+    updateImageCount();
+    await displayEachImages();
+    displaySidebarLabelList(await fetchLabelList(document.getElementById("projectLink").textContent.trim()));
+    updateActiveLabel(); // displayEachImages の完了後に updateActiveLabel を実行
+  });
+
+  // 初期状態でサイドバーのラベル一覧を表示
+  displaySidebarLabelList(await fetchLabelList(document.getElementById("projectLink").textContent.trim()));
+   // スクロールイベントリスナーを追加
+   window.addEventListener('scroll', updateActiveLabel);
+   // 初期状態でアクティブなラベルを設定
+  updateActiveLabel(); 
+}
 
 // 共通のエラーハンドリング関数
 function handleError(error, message) {
@@ -52,8 +67,8 @@ async function handleLabelDeleteClick(event) {
     // ラベルコンテナをDOMから削除
     labelContainer.remove();
 
-    // 画像総数を更新
-    updateImageCount();
+    // カスタムイベントを発生
+    document.dispatchEvent(new Event('image-data-changed'));
   } catch (error) {
     handleError(error, 'ラベルの削除に失敗しました');
   }
@@ -81,8 +96,9 @@ async function handleDeleteButtonClick(event) {
         updateLabelImageCount(labelName);
       })
     );
-     // 画像総数を更新
-     updateImageCount();
+
+    // カスタムイベントを発生
+    document.dispatchEvent(new Event('image-data-changed'));
   } catch (error) {
     handleError(error, '画像の削除に失敗しました');
   }
@@ -168,6 +184,7 @@ function handleLabelClick(event) {
       console.error('ラベルの取得中にエラーが発生しました:', error);
     });
 }
+
 // ラベル項目クリック時のイベントリスナー
 async function handleLabelItemClick(event) {
   const selectedImageCards = document.querySelectorAll('.image-card.selected');
@@ -193,6 +210,10 @@ async function handleLabelItemClick(event) {
           // 画像カードを新しいラベルコンテナに移動
           const targetLabelContainer = document.querySelector(`.label-container[data-label-id="${targetLabel}"] .image-grid-inner`);
           targetLabelContainer.appendChild(imageCard);
+
+           // 移動元のラベルと移動先のラベルの画像数を更新
+           updateLabelImageCount(sourceLabel);
+           updateLabelImageCount(targetLabel);
         }
       })
     );
@@ -202,6 +223,9 @@ async function handleLabelItemClick(event) {
     if (labelListContainer) {
       labelListContainer.remove();
     }
+
+    // カスタムイベントを発生
+    document.dispatchEvent(new Event('image-data-changed'));
   } catch (error) {
     handleError(error, '画像の移動に失敗しました');
   }
@@ -221,6 +245,11 @@ async function moveImage(projectName, imageName, sourceLabel, targetLabel) {
 function setupEventListeners() {
   document.querySelectorAll('.upload-button').forEach(button => {
     button.addEventListener('click', handleUploadButtonClick);
+  });
+
+  document.querySelectorAll('.image-grid-inner').forEach(grid => {
+    grid.addEventListener('dragover', (event) => event.preventDefault());
+    grid.addEventListener('drop', handleImageGridDrop);
   });
 
   document.querySelectorAll('.image-label').forEach(label => {
@@ -287,6 +316,9 @@ async function createNewLabel() {
 
     // 入力欄をクリア
     newLabelNameInput.value = '';
+
+     // カスタムイベントを発生
+     document.dispatchEvent(new Event('image-data-changed'));
   } catch (error) {
     handleError(error, 'ラベルの作成に失敗しました');
   }
@@ -605,8 +637,8 @@ async function uploadImages(files, targetDirectory) {
       throw new Error('画像のアップロードに失敗しました');
     }
 
-    // アップロード後に画像一覧を再取得して表示
-    await displayEachImages();
+    // カスタムイベントを発生
+    document.dispatchEvent(new Event('image-data-changed'));
   } catch (error) {
     handleError(error, '画像のアップロード中にエラーが発生しました');
   }
@@ -684,6 +716,68 @@ function createLabelContainer(labelName) {
   labelContainer.appendChild(uploadButton);
 
   return labelContainer;
+}
+
+// サイドバーのラベル一覧と画像数を表示する関数
+function displaySidebarLabelList(labelList) {
+  const sidebarLabelList = document.getElementById('sidebarLabelList');
+  sidebarLabelList.innerHTML = ''; // 既存のラベル一覧をクリア
+
+  // All を追加
+  const allLabel = document.createElement('div');
+  allLabel.textContent = 'All';
+  const allImageCount = document.createElement('div');
+  allImageCount.textContent = `${document.querySelectorAll('.image-card').length} images`;
+  allImageCount.classList.add('image-count'); // 画像数表示用のクラスを追加
+  sidebarLabelList.appendChild(allLabel);
+  sidebarLabelList.appendChild(allImageCount);
+
+  // ラベルごとに追加
+  labelList.forEach(label => {
+    if (label.isDirectory) {
+      const labelElement = document.createElement('div');
+      labelElement.textContent = label.name;
+      const imageCount = document.createElement('div');
+      imageCount.textContent = `${document.querySelectorAll(`.image-card[data-label-name="${label.name}"]`).length} images`;
+      imageCount.classList.add('image-count'); // 画像数表示用のクラスを追加
+      sidebarLabelList.appendChild(labelElement);
+      sidebarLabelList.appendChild(imageCount);
+    }
+  });
+}
+
+// アクティブなラベルを更新する関数
+function updateActiveLabel() {
+  const labelContainers = document.querySelectorAll('.label-container');
+  const sidebarLabelList = document.getElementById('sidebarLabelList');
+  const sidebarLabels = sidebarLabelList.querySelectorAll('div:not(.image-count)'); // 画像数表示以外の要素を取得
+
+  // 全てのラベルを非アクティブにする
+  sidebarLabels.forEach(label => label.classList.remove('active'));
+
+  // スクロール位置が最上部なら "All" をアクティブにする
+  if (window.scrollY === 0) {
+    sidebarLabels[0].classList.add('active');
+    return;
+  }
+
+  // 画面上部に表示されているラベルを検索
+  let activeLabel = null;
+  for (const labelContainer of labelContainers) {
+    const labelRect = labelContainer.getBoundingClientRect();
+    if (labelRect.top <= 250 && labelRect.bottom > 250) { // ラベルが画面上部に表示されている
+      activeLabel = labelContainer.dataset.labelId;
+      break;
+    }
+  }
+
+  // アクティブなラベルを更新
+  if (activeLabel) {
+    const activeSidebarLabel = Array.from(sidebarLabels).find(label => label.textContent === activeLabel);
+    if (activeSidebarLabel) {
+      activeSidebarLabel.classList.add('active');
+    }
+  }
 }
 
 // APIのベースURLを設定
