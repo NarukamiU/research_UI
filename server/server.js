@@ -32,7 +32,7 @@ const upload = multer({
   // ファイルタイプを制限する fileFilter オプションを追加
   fileFilter: (req, file, cb) => {
     // 許可する MIME タイプ
-    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    const allowedMimeTypes = ['image/jpeg', 'image/png','image/webp'];
 
     // ファイルタイプが許可されている場合は cb(null, true) を呼び出す
     if (allowedMimeTypes.includes(file.mimetype)) {

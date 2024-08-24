@@ -718,7 +718,7 @@ function createLabelContainer(labelName) {
   return labelContainer;
 }
 
-// サイドバーのラベル一覧と画像数を表示する関数
+/// サイドバーのラベル一覧と画像数を表示する関数
 function displaySidebarLabelList(labelList) {
   const sidebarLabelList = document.getElementById('sidebarLabelList');
   sidebarLabelList.innerHTML = ''; // 既存のラベル一覧をクリア
@@ -726,11 +726,33 @@ function displaySidebarLabelList(labelList) {
   // All を追加
   const allLabel = document.createElement('div');
   allLabel.textContent = 'All';
+  allLabel.classList.add('active-click'); // 初期状態でクリックされた状態にする
   const allImageCount = document.createElement('div');
   allImageCount.textContent = `${document.querySelectorAll('.image-card').length} images`;
   allImageCount.classList.add('image-count'); // 画像数表示用のクラスを追加
   sidebarLabelList.appendChild(allLabel);
   sidebarLabelList.appendChild(allImageCount);
+
+  // All ラベルのクリックイベントリスナー
+  allLabel.addEventListener('click', () => {
+    const labelContainers = document.querySelectorAll('.label-container');
+    labelContainers.forEach(container => {
+      container.style.display = 'block'; // すべてのラベルコンテナを表示
+    });
+
+    // すべてのサイドバーラベルから active-click クラスを削除
+    const sidebarLabels = sidebarLabelList.querySelectorAll('div:not(.image-count)');
+    sidebarLabels.forEach(label => label.classList.remove('active-click'));
+
+    // All ラベルに active-click クラスを追加
+    allLabel.classList.add('active-click');
+
+    // image-list-header を表示
+    document.querySelector('.image-list-header').style.display = 'block';
+
+    // アクティブなラベルを更新 (スクロール位置による)
+    updateActiveLabel();
+  });
 
   // ラベルごとに追加
   labelList.forEach(label => {
@@ -742,6 +764,28 @@ function displaySidebarLabelList(labelList) {
       imageCount.classList.add('image-count'); // 画像数表示用のクラスを追加
       sidebarLabelList.appendChild(labelElement);
       sidebarLabelList.appendChild(imageCount);
+
+      // ラベル要素のクリックイベントリスナー
+      labelElement.addEventListener('click', () => {
+        const labelContainers = document.querySelectorAll('.label-container');
+        labelContainers.forEach(container => {
+          // クリックされたラベルのコンテナのみ表示、それ以外は非表示
+          container.style.display = container.dataset.labelId === label.name ? 'block' : 'none'; 
+        });
+
+        // すべてのサイドバーラベルから active-click クラスを削除
+        const sidebarLabels = sidebarLabelList.querySelectorAll('div:not(.image-count)');
+        sidebarLabels.forEach(label => label.classList.remove('active-click'));
+
+        // クリックされたラベルに active-click クラスを追加
+        labelElement.classList.add('active-click');
+
+        // image-list-header を非表示
+        document.querySelector('.image-list-header').style.display = 'none';
+
+        // アクティブなラベルを更新 (スクロール位置による)
+        updateActiveLabel();
+      });
     }
   });
 }
@@ -752,12 +796,12 @@ function updateActiveLabel() {
   const sidebarLabelList = document.getElementById('sidebarLabelList');
   const sidebarLabels = sidebarLabelList.querySelectorAll('div:not(.image-count)'); // 画像数表示以外の要素を取得
 
-  // 全てのラベルを非アクティブにする
-  sidebarLabels.forEach(label => label.classList.remove('active'));
+  // すべてのサイドバーラベルから active-scroll クラスを削除
+  sidebarLabels.forEach(label => label.classList.remove('active-scroll'));
 
-  // スクロール位置が最上部なら "All" をアクティブにする
-  if (window.scrollY === 0) {
-    sidebarLabels[0].classList.add('active');
+  // スクロール位置が最上部で、All がクリックされている場合のみ "All" を active-scroll にする
+  if (window.scrollY === 0 && sidebarLabels[0].classList.contains('active-click')) { 
+    sidebarLabels[0].classList.add('active-scroll');
     return;
   }
 
@@ -775,7 +819,7 @@ function updateActiveLabel() {
   if (activeLabel) {
     const activeSidebarLabel = Array.from(sidebarLabels).find(label => label.textContent === activeLabel);
     if (activeSidebarLabel) {
-      activeSidebarLabel.classList.add('active');
+      activeSidebarLabel.classList.add('active-scroll');
     }
   }
 }

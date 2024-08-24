@@ -17,10 +17,15 @@ body {
   left: 0;
 }
 
-.sidebar .label-list .active {
-  color: white; /* アクティブなラベルの文字色を白に設定 */
+.sidebar .label-list .active-scroll { /* スクロール位置によるアクティブ状態 */
+  color: white;
 }
 
+.sidebar .label-list .active-click {
+  background-color: #858585; /* 背景色を明るくする */
+  border-radius: 5px; /* 角を丸くする */
+  padding: 8px 12px; /* 幅を広くする */
+}
 .active {
   color: white;
 }
