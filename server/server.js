@@ -8,6 +8,10 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const port = 3000;
 
+const http = require('http'); // http モジュールを require
+const server = http.createServer(app); // HTTP サーバーを作成
+const io = require('socket.io')(server); // Socket.IO を初期化
+
 const uploadDir = path.join(__dirname, '../images');
 
 // uploadsディレクトリがなければ作成する
@@ -79,38 +83,40 @@ app.get('/', async (req, res) => {
   }
 });
 
-// ファイルアップロード API
-app.post('/upload', upload.array('files', 10), async (req, res) => { 
-  try {
-    // ディレクトリが存在しない場合は作成
-    await fs.ensureDir(path.join(uploadDir, req.body.path));
+io.on('connection', (socket) => {
+  console.log('クライアントが接続しました');
 
-    // アップロードされたファイルの処理
-    const uploadedFiles = await Promise.all(req.files.map(async (file) => {
+  // 画像アップロードイベント
+  socket.on('upload', async (data) => {
+    const { projectName, labelName, fileData, originalFilename } = data;
+    const uploadPath = path.join(uploadDir, 'projects', projectName, labelName);
+
+    try {
       // UUID を使用してファイル名を生成
-      const fileExtension = path.extname(file.originalname);
+      const fileExtension = path.extname(originalFilename);
       const filename = `${uuidv4()}${fileExtension}`;
 
-      // ファイルを移動
-      const destination = path.join(uploadDir, req.body.path, filename);
-      await fs.move(file.path, destination);
+      // アップロード先ディレクトリが存在しない場合は作成
+      await fs.ensureDir(uploadPath);
 
-      return { originalFilename: file.originalname, filename }; // 元のファイル名と新しいファイル名を返す
-    }));
+      // ファイルを保存
+      const filePath = path.join(uploadPath, filename);
+      await fs.writeFile(filePath, fileData); // Base64 デコードは不要
 
-    const projectName = req.body.path.split('/')[1]; // project名を取得
-    res.json({ message: 'ファイルアップロード成功', filenames: uploadedFiles, projectName }); // projectName をレスポンスに追加
-  } catch (err) {
-    console.error('ファイルアップロードエラー:', err);
-    res.status(500).json({ error: 'ファイルアップロード失敗', details: err.message }); 
-  }
-});
+      // 成功メッセージをクライアントに送信
+      socket.emit('uploadSuccess', { message: 'ファイルアップロード成功', fileName: filename });
 
-// 検証用画像フォルダのアップロード API
-app.post('/upload-folder', upload.array('files'), async (req, res) => {
-  try {
-    const projectName = req.body.projectName;
-    const originalFolderName = req.body.folderName;
+      // 画像データが変更されたことを通知
+      io.emit('image-data-changed');
+    } catch (err) {
+      console.error('ファイルアップロードエラー:', err);
+      socket.emit('uploadError', { error: 'ファイルアップロード失敗', details: err.message });
+    }
+  });
+
+   // フォルダアップロードイベント
+   socket.on('uploadFolder', async (data) => {
+    const { projectName, originalFolderName, files } = data;
     let folderName = originalFolderName;
     let counter = 1;
     let uploadPath = path.join(uploadDir, 'verification', projectName, folderName);
@@ -125,19 +131,19 @@ app.post('/upload-folder', upload.array('files'), async (req, res) => {
     // アップロード先ディレクトリを作成
     await fs.ensureDir(uploadPath);
 
-    // ファイルを移動
+    // ファイルを移動 (ファイル名は変更しない)
     await Promise.all(
-      req.files.map(async (file) => {
-        const destination = path.join(uploadPath, file.originalname);
-        await fs.move(file.path, destination);
+      files.map(async (file) => {
+        const destination = path.join(uploadPath, file.name); // 元のファイル名を使用
+        await fs.writeFile(destination, file.data); // Base64 デコードは不要
       })
     );
 
-    res.json({ message: 'フォルダのアップロードに成功しました。', folderName: folderName }); // 保存されたフォルダ名を返す
-  } catch (err) {
-    console.error('ファイルアップロードエラー:', err);
-    res.status(500).json({ error: 'フォルダのアップロードに失敗しました。', details: err.message });
-  }
+    socket.emit('uploadFolderSuccess', { message: 'フォルダのアップロードに成功しました。', folderName: folderName });
+
+    // 画像データが変更されたことを通知
+    io.emit('image-data-changed');
+  });
 });
 
 // 進捗状況を返す API
@@ -412,6 +418,6 @@ async function getImagesForProject(projectName) {
   }
 }
 
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`サーバーが起動しました: http://localhost:${port}`);
 });

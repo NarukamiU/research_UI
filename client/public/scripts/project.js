@@ -1,8 +1,30 @@
 // DOMContentLoaded イベント発生時の初期化処理
 document.addEventListener('DOMContentLoaded', init);
+// グローバルスコープで socket 変数を定義
+let socket;
 
 // 初期化関数
 async function init() {
+  socket = io('http://localhost:3000'); // サーバーに接続
+  console.log('サーバーに接続しました');
+
+  // 画像アップロード成功イベント
+  socket.on('uploadSuccess', (data) => {
+    console.log(data.message, data.fileName); // 成功メッセージを表示
+  });
+
+  // 画像アップロードエラーイベント
+  socket.on('uploadError', (data) => {
+    handleError(data.error, data.details); // エラーメッセージを表示
+  });
+
+  // フォルダアップロード成功イベント
+  socket.on('uploadFolderSuccess', (data) => {
+    console.log(data.message, data.folderName); // 成功メッセージを表示
+    const folderNameElement = document.getElementById('uploadedFolderName');
+    folderNameElement.textContent = `Uploaded Folder: ${data.folderName}`; // 保存されたフォルダ名を表示
+  });
+  
   setupImageHoverEvents();
   await displayEachImages();
   setupEventListeners();
@@ -153,52 +175,6 @@ function setupSidebarCheckToggle() {
 }
 
 
-// "Upload" ボタンのクリックイベントハンドラ
-async function handleUploadFolderClick() {
-  // フォルダ選択ダイアログを表示
-  const directoryHandle = await window.showDirectoryPicker();
-
-  // プロジェクト名を取得
-  const projectName = document.getElementById("projectLink").textContent.trim();
-
-  // フォルダ名を表示する要素を作成
-  const folderNameElement = document.createElement('div');
-  folderNameElement.id = 'uploadedFolderName';
-  folderNameElement.textContent = `Uploaded Folder: ${directoryHandle.name}`;
-
-  // uploadButtonContainer にフォルダ名を表示する要素を追加
-  const uploadButtonContainer = document.getElementById('uploadButtonContainer');
-  uploadButtonContainer.appendChild(folderNameElement);
-
-  // FormData を作成
-  const formData = new FormData();
-  formData.append('projectName', projectName);
-  formData.append('folderName', directoryHandle.name);
-
-  // フォルダ内のファイルを FormData に追加
-  for await (const entry of directoryHandle.values()) {
-    if (entry.kind === 'file') {
-      const file = await entry.getFile();
-      formData.append('files', file); // 複数ファイルをアップロードするために 'files' をキーにする
-    }
-  }
-
-  try {
-    const response = await fetch('/upload-folder', {
-      method: 'POST',
-      body: formData
-    });
-
-    if (!response.ok) {
-      throw new Error('フォルダのアップロードに失敗しました。');
-    }
-
-    const data = await response.json();
-    folderNameElement.textContent = `Uploaded Folder: ${data.folderName}`; // 保存されたフォルダ名を表示
-  } catch (error) {
-    handleError(error, 'フォルダのアップロード中にエラーが発生しました。');
-  }
-}
 
 
 // ラベル削除ボタンのクリックイベント
@@ -433,11 +409,6 @@ function updateProgress(progress) {
 function setupEventListeners() {
   document.querySelectorAll('.upload-button').forEach(button => {
     button.addEventListener('click', handleUploadButtonClick);
-  });
-
-  document.querySelectorAll('.image-grid-inner').forEach(grid => {
-    grid.addEventListener('dragover', (event) => event.preventDefault());
-    grid.addEventListener('drop', handleImageGridDrop);
   });
 
   document.querySelectorAll('.image-label').forEach(label => {
@@ -809,39 +780,63 @@ async function displayEachImages() {
 
 // 画像アップロード処理
 async function uploadImages(files, targetDirectory) {
-  try {
-    const formData = new FormData();
-    for (const file of files) {
-      formData.append('files', file);
+  const projectName = targetDirectory.split('/')[2]; // プロジェクト名を取得
+  const labelName = targetDirectory.split('/')[3]; // ラベル名を取得
+
+  // 各ファイルをアップロード
+  for (const file of files) {
+    try {
+      // 画像アップロードイベントをサーバーに送信 (バイナリデータのまま送信)
+      socket.emit('upload', {
+        projectName: projectName,
+        labelName: labelName,
+        fileData: file, // バイナリデータ
+        originalFilename: file.name,
+      });
+    } catch (error) {
+      handleError(error, '画像のアップロード中にエラーが発生しました');
     }
-    formData.append('path', targetDirectory);
-
-    const response = await fetch('http://localhost:3000/upload', {
-      method: 'POST',
-      body: formData
-    });
-
-    if (!response.ok) {
-      throw new Error('画像のアップロードに失敗しました');
-    }
-
-    // カスタムイベントを発生
-    document.dispatchEvent(new Event('image-data-changed'));
-  } catch (error) {
-    handleError(error, '画像のアップロード中にエラーが発生しました');
   }
 }
 
-// ドロップされた画像の処理
-function handleImageGridDrop(event) {
-  event.preventDefault();
-  const files = event.dataTransfer.files;
-  const targetLabel = event.target.closest('.label-container').dataset.labelId;
-  const projectName = document.getElementById("projectLink").textContent.trim();
-  const targetDirectory = `/projects/${projectName}/${targetLabel}`;
+// "Upload" ボタンのクリックイベントハンドラ
+async function handleUploadFolderClick() {
+  // フォルダ選択ダイアログを表示
+  const directoryHandle = await window.showDirectoryPicker();
 
-  uploadImages(files, targetDirectory);
+  // プロジェクト名を取得
+  const projectName = document.getElementById("projectLink").textContent.trim();
+
+  // フォルダ名を表示する要素を作成
+  const folderNameElement = document.createElement('div');
+  folderNameElement.id = 'uploadedFolderName';
+  folderNameElement.textContent = `Uploaded Folder: ${directoryHandle.name}`;
+
+  // uploadButtonContainer にフォルダ名を表示する要素を追加
+  const uploadButtonContainer = document.getElementById('uploadButtonContainer');
+  uploadButtonContainer.appendChild(folderNameElement);
+
+  // ファイルのリストを作成
+  const files = [];
+  for await (const entry of directoryHandle.values()) {
+    if (entry.kind === 'file') {
+      const file = await entry.getFile();
+      files.push({ name: file.name, data: file }); // バイナリデータ
+    }
+  }
+
+  // フォルダ内のファイルをアップロード
+  try {
+    socket.emit('uploadFolder', {
+      projectName: projectName,
+      originalFolderName: directoryHandle.name,
+      files: files,
+    });
+  } catch (error) {
+    handleError(error, 'フォルダのアップロード中にエラーが発生しました。');
+  }
 }
+
 
 // アップロードボタンのクリック処理
 function handleUploadButtonClick(event) {
