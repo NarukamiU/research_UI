@@ -106,6 +106,46 @@ app.post('/upload', upload.array('files', 10), async (req, res) => {
   }
 });
 
+// 検証用画像フォルダのアップロード API
+app.post('/upload-folder', upload.array('files'), async (req, res) => {
+  try {
+    const projectName = req.body.projectName;
+    const originalFolderName = req.body.folderName;
+    let folderName = originalFolderName;
+    let counter = 1;
+    let uploadPath = path.join(uploadDir, 'verification', projectName, folderName);
+
+    // アップロード先ディレクトリが存在する場合は、連番を付与してフォルダ名を作成
+    while (fs.existsSync(uploadPath)) {
+      folderName = `${originalFolderName}-${counter}`;
+      uploadPath = path.join(uploadDir, 'verification', projectName, folderName);
+      counter++;
+    }
+
+    // アップロード先ディレクトリを作成
+    await fs.ensureDir(uploadPath);
+
+    // ファイルを移動
+    await Promise.all(
+      req.files.map(async (file) => {
+        const destination = path.join(uploadPath, file.originalname);
+        await fs.move(file.path, destination);
+      })
+    );
+
+    res.json({ message: 'フォルダのアップロードに成功しました。', folderName: folderName }); // 保存されたフォルダ名を返す
+  } catch (err) {
+    console.error('ファイルアップロードエラー:', err);
+    res.status(500).json({ error: 'フォルダのアップロードに失敗しました。', details: err.message });
+  }
+});
+
+// 進捗状況を返す API
+app.get('/progress', (req, res) => {
+  const progress = 84 // 適当な数値 (0〜100)
+
+  res.json({ progress: progress });
+});
 
 // ディレクトリ一覧取得 API
 app.get('/directory', async (req, res) => {

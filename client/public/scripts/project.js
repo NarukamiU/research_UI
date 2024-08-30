@@ -14,13 +14,26 @@ async function init() {
     displaySidebarLabelList(await fetchLabelList(document.getElementById("projectLink").textContent.trim()));
     updateActiveLabel(); // displayEachImages の完了後に updateActiveLabel を実行
   });
+  // "Label" 文字のクリックイベントリスナーを追加
+  setupSidebarLabelToggle();
+
+  // "Check" 項目のクリックイベントリスナーを追加
+  setupSidebarCheckToggle();
 
   // 初期状態でサイドバーのラベル一覧を表示
   displaySidebarLabelList(await fetchLabelList(document.getElementById("projectLink").textContent.trim()));
-   // スクロールイベントリスナーを追加
-   window.addEventListener('scroll', updateActiveLabel);
-   // 初期状態でアクティブなラベルを設定
+  // スクロールイベントリスナーを追加
+  window.addEventListener('scroll', updateActiveLabel);
+  // 初期状態でアクティブなラベルを設定
   updateActiveLabel(); 
+
+  // sidebar-label 要素を初期状態でアクティブにする
+  const sidebarLabel = document.getElementById('sidebarLabel');
+  const imageList = document.getElementById('imageList');
+  sidebarLabel.classList.add('active');
+  imageList.style.display = 'block';
+  // プログレスバーを表示
+  await displayProgress(); 
 }
 
 // 共通のエラーハンドリング関数
@@ -50,6 +63,143 @@ async function sendRequest(url, method, data, errorMessage) {
     throw error;
   }
 }
+
+
+// "Label" 文字のクリックイベントリスナーを設定する関数
+function setupSidebarLabelToggle() {
+  const sidebarLabel = document.getElementById('sidebarLabel');
+  const sidebarLabelList = document.getElementById('sidebarLabelList');
+  const labelToggleIcon = document.getElementById('labelToggleIcon');
+  const imageList = document.getElementById('imageList');
+  const sidebarCheck = document.getElementById('sidebarCheck'); // sidebar-check 要素を取得
+
+  sidebarLabel.addEventListener('click', () => {
+    // ラベル一覧の表示・非表示を切り替え
+    sidebarLabelList.style.display = sidebarLabelList.style.display === 'none' ? 'block' : 'none';
+
+    // 山括弧の表示を切り替え
+    labelToggleIcon.textContent = sidebarLabelList.style.display === 'block' ? '︿' : '﹀';
+
+    // sidebar-label 要素をアクティブにする
+    sidebarLabel.classList.add('active');
+
+    // sidebar-check 要素を非アクティブにする
+    sidebarCheck.classList.remove('active');
+    document.getElementById('sidebarCheckList').style.display = 'none'; 
+    document.getElementById('checkContent').style.display = 'none';
+
+    // sidebar-label 要素のアクティブ状態に合わせて image-list の表示を切り替え
+    if (sidebarLabel.classList.contains('active')) {
+      imageList.style.display = 'block';
+      document.querySelector('.add-label-container').style.display = 'block'; // addLabelButton を表示
+    } else {
+      imageList.style.display = 'none';
+      document.querySelector('.add-label-container').style.display = 'none'; // addLabelButton を非表示
+    }
+
+    // sidebar-label 要素がアクティブになったので image-list を表示
+    imageList.style.display = 'block'; 
+  });
+}
+
+// "Check" 項目のクリックイベントリスナーを設定する関数
+function setupSidebarCheckToggle() {
+  const sidebarCheck = document.getElementById('sidebarCheck');
+  const sidebarCheckList = document.getElementById('sidebarCheckList');
+  const imageList = document.getElementById('imageList');
+  const checkContent = document.getElementById('checkContent');
+  const sidebarLabel = document.getElementById('sidebarLabel'); 
+
+  // "Upload" ボタンを生成 (一度だけ)
+  const uploadButtonContainer = document.getElementById('uploadButtonContainer');
+  const uploadButton = document.createElement('button');
+  uploadButton.textContent = 'Upload';
+  uploadButton.addEventListener('click', handleUploadFolderClick);
+  uploadButtonContainer.appendChild(uploadButton);
+
+  sidebarCheck.addEventListener('click', () => {
+
+    // 既にアクティブな場合は処理を中断
+    if (sidebarCheck.classList.contains('active')) {
+      return; 
+    }
+
+    // CheckList の表示・非表示を切り替え
+    sidebarCheckList.style.display = sidebarCheckList.style.display === 'none' ? 'block' : 'none';
+
+    // "Check" 項目のアクティブ状態を切り替え
+    sidebarCheck.classList.toggle('active');
+
+    // image-list と check-content の表示を切り替え
+    if (sidebarCheckList.style.display === 'block') {
+      imageList.style.display = 'none';
+      checkContent.style.display = 'block';
+
+      // "Upload" ボタンを表示
+      uploadButton.style.display = 'block'; 
+    } else {
+      imageList.style.display = 'block';
+      checkContent.style.display = 'none';
+
+      // "Upload" ボタンを非表示
+      uploadButton.style.display = 'none'; 
+    }
+
+    // sidebar-label 要素を非アクティブにする
+    sidebarLabel.classList.remove('active');
+    document.getElementById('sidebarLabelList').style.display = 'none'; 
+    document.getElementById('labelToggleIcon').textContent = '﹀';
+  });
+}
+
+
+// "Upload" ボタンのクリックイベントハンドラ
+async function handleUploadFolderClick() {
+  // フォルダ選択ダイアログを表示
+  const directoryHandle = await window.showDirectoryPicker();
+
+  // プロジェクト名を取得
+  const projectName = document.getElementById("projectLink").textContent.trim();
+
+  // フォルダ名を表示する要素を作成
+  const folderNameElement = document.createElement('div');
+  folderNameElement.id = 'uploadedFolderName';
+  folderNameElement.textContent = `Uploaded Folder: ${directoryHandle.name}`;
+
+  // uploadButtonContainer にフォルダ名を表示する要素を追加
+  const uploadButtonContainer = document.getElementById('uploadButtonContainer');
+  uploadButtonContainer.appendChild(folderNameElement);
+
+  // FormData を作成
+  const formData = new FormData();
+  formData.append('projectName', projectName);
+  formData.append('folderName', directoryHandle.name);
+
+  // フォルダ内のファイルを FormData に追加
+  for await (const entry of directoryHandle.values()) {
+    if (entry.kind === 'file') {
+      const file = await entry.getFile();
+      formData.append('files', file); // 複数ファイルをアップロードするために 'files' をキーにする
+    }
+  }
+
+  try {
+    const response = await fetch('/upload-folder', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error('フォルダのアップロードに失敗しました。');
+    }
+
+    const data = await response.json();
+    folderNameElement.textContent = `Uploaded Folder: ${data.folderName}`; // 保存されたフォルダ名を表示
+  } catch (error) {
+    handleError(error, 'フォルダのアップロード中にエラーが発生しました。');
+  }
+}
+
 
 // ラベル削除ボタンのクリックイベント
 async function handleLabelDeleteClick(event) {
@@ -240,6 +390,44 @@ async function moveImage(projectName, imageName, sourceLabel, targetLabel) {
   );
 }
 
+// プログレスバーを表示する関数
+async function displayProgress() {
+  const progressContainer = document.getElementById('progressContainer');
+
+  // 円形のプログレスバーを生成
+  const progressBar = document.createElement('div');
+  progressBar.classList.add('progress-bar');
+  progressContainer.appendChild(progressBar);
+
+  // パーセンテージ表示を生成
+  const percentage = document.createElement('div');
+  percentage.classList.add('percentage');
+  progressBar.appendChild(percentage);
+
+  // サーバーから進捗状況を取得
+  try {
+    const response = await fetch('/progress');
+    const data = await response.json();
+    updateProgress(data.progress);
+  } catch (error) {
+    handleError(error, '進捗状況の取得に失敗しました。');
+  }
+}
+
+// プログレスバーを更新する関数
+function updateProgress(progress) {
+  const progressBar = document.querySelector('.progress-bar');
+  const percentage = document.querySelector('.percentage');
+
+  // プログレスバーの角度を計算
+  const angle = progress * 3.6; // 360度 * (progress / 100)
+
+  // プログレスバーのスタイルを更新
+  progressBar.style.backgroundImage = `conic-gradient(#68b7ff 0deg, #68b7ff ${angle}deg, transparent ${angle}deg, transparent 360deg)`; // 最後の色を transparent に変更
+  
+  // パーセンテージ表示を更新
+  percentage.textContent = `${progress}%`;
+}
 
 // イベントリスナーの設定関数
 function setupEventListeners() {

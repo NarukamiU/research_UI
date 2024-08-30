@@ -13,9 +13,20 @@
     </div>
     <h2 id="projectLink"><%= projectName %></h2>
     <div class="info">info</div>
-    <!-- ラベル一覧表示用のコンテナを追加 -->
-    <div class="label-list" id="sidebarLabelList">
-    </div>
+    <!-- ラベル表示用の要素を追加 -->
+  <div class="sidebar-label" id="sidebarLabel">
+    Label 
+    <span id="labelToggleIcon">﹀</span> </div>
+
+  <!-- ラベル一覧表示用のコンテナを追加 -->
+  <div class="label-list" id="sidebarLabelList" style="display: none;"></div> 
+  <!-- Check 項目を追加 -->
+  <div class="sidebar-check" id="sidebarCheck">Check</div>
+  <div class="check-list" id="sidebarCheckList" style="display: none;"></div>
+  <!-- プログレスバーを表示する領域を追加 -->
+  <div class="progress-container" id="progressContainer"></div>
+  
+  </div>
      <!-- ハンバーガーメニューの内容 -->
      <div class="menu" id="menu">
       <ul>
@@ -45,7 +56,7 @@
 
   <div class="content" id="projectContent">
     <!-- 画像一覧 -->
-    <div class="image-list">
+    <div class="image-list" id="imageList" style="display: none;">
       <div class="image-list-header">
         <span class="image-list-title">ALL (<%= images.length %> images)</span>
         <!--button class="sort-button">Sort</button-->
@@ -53,16 +64,25 @@
       <div class="image-grid" id="imageGrid">
         <!--ここにproject.jsのcreateLabelContainer関数でラベルごとに生成される。-->
       </div>
+
+      <!-- ラベル追加 -->
+      <div class="add-label-container">
+        <button id="addLabelButton">⊕ Add Label</button>
+        <div class="add-label-form" style="display: none;">
+          <input type="text" id="newLabelName" placeholder="ラベル名を入力">
+          <button id="createNewLabelButton">作成</button>
+        </div>
+      </div> 
     </div>
 
-    <!-- ラベル追加 -->
-    <div class="add-label-container">
-      <button id="addLabelButton">⊕ Add Label</button>
-      <div class="add-label-form" style="display: none;">
-        <input type="text" id="newLabelName" placeholder="ラベル名を入力">
-        <button id="createNewLabelButton">作成</button>
-      </div>
+    <!-- Check 項目の内容を表示する領域を追加 -->
+    <div class="check-content" id="checkContent" style="display: none;">
+      <!-- Check 項目の内容はここに表示 -->
+      <div id="uploadButtonContainer"></div>
     </div>
+
+    
+
   </div>
 
   <script src="/scripts/project.js"></script>
