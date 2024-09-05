@@ -7,11 +7,14 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const port = 3000;
 
+<<<<<<< HEAD
 
 const http = require('http'); // http モジュールを require
 const server = http.createServer(app); // HTTP サーバーを作成
 const io = require('socket.io')(server); // Socket.IO を初期化
 
+=======
+>>>>>>> 0d4992c85a9d640e26ecf24aa1b8f1aeaf2d62bd
 const uploadDir = path.join(__dirname, '../images');
 
 // uploadsディレクトリがなければ作成する
@@ -289,6 +292,77 @@ app.get('/', async (req, res) => {
   }
 });
 
+<<<<<<< HEAD
+=======
+// ファイルアップロード API
+app.post('/upload', upload.array('files', 10), async (req, res) => { 
+  try {
+    // ディレクトリが存在しない場合は作成
+    await fs.ensureDir(path.join(uploadDir, req.body.path));
+
+    // アップロードされたファイルの処理
+    const uploadedFiles = await Promise.all(req.files.map(async (file) => {
+      // UUID を使用してファイル名を生成
+      const fileExtension = path.extname(file.originalname);
+      const filename = `${uuidv4()}${fileExtension}`;
+
+      // ファイルを移動
+      const destination = path.join(uploadDir, req.body.path, filename);
+      await fs.move(file.path, destination);
+
+      return { originalFilename: file.originalname, filename }; // 元のファイル名と新しいファイル名を返す
+    }));
+
+    const projectName = req.body.path.split('/')[1]; // project名を取得
+    res.json({ message: 'ファイルアップロード成功', filenames: uploadedFiles, projectName }); // projectName をレスポンスに追加
+  } catch (err) {
+    console.error('ファイルアップロードエラー:', err);
+    res.status(500).json({ error: 'ファイルアップロード失敗', details: err.message }); 
+  }
+});
+
+// 検証用画像フォルダのアップロード API
+app.post('/upload-folder', upload.array('files'), async (req, res) => {
+  try {
+    const projectName = req.body.projectName;
+    const originalFolderName = req.body.folderName;
+    let folderName = originalFolderName;
+    let counter = 1;
+    let uploadPath = path.join(uploadDir, 'verification', projectName, folderName);
+
+    // アップロード先ディレクトリが存在する場合は、連番を付与してフォルダ名を作成
+    while (fs.existsSync(uploadPath)) {
+      folderName = `${originalFolderName}-${counter}`;
+      uploadPath = path.join(uploadDir, 'verification', projectName, folderName);
+      counter++;
+    }
+
+    // アップロード先ディレクトリを作成
+    await fs.ensureDir(uploadPath);
+
+    // ファイルを移動
+    await Promise.all(
+      req.files.map(async (file) => {
+        const destination = path.join(uploadPath, file.originalname);
+        await fs.move(file.path, destination);
+      })
+    );
+
+    res.json({ message: 'フォルダのアップロードに成功しました。', folderName: folderName }); // 保存されたフォルダ名を返す
+  } catch (err) {
+    console.error('ファイルアップロードエラー:', err);
+    res.status(500).json({ error: 'フォルダのアップロードに失敗しました。', details: err.message });
+  }
+});
+
+// 進捗状況を返す API
+app.get('/progress', (req, res) => {
+  const progress = 84 // 適当な数値 (0〜100)
+
+  res.json({ progress: progress });
+});
+
+>>>>>>> 0d4992c85a9d640e26ecf24aa1b8f1aeaf2d62bd
 // ディレクトリ一覧取得 API
 app.get('/directory', async (req, res) => {
   const requestedPath = req.query.path;
@@ -409,6 +483,10 @@ async function getImagesForProject(projectName) {
   }
 }
 
-server.listen(port, () => {
+app.listen(port, () => {
   console.log(`サーバーが起動しました: http://localhost:${port}`);
 });
+<<<<<<< HEAD
+=======
+
+>>>>>>> 0d4992c85a9d640e26ecf24aa1b8f1aeaf2d62bd
