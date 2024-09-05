@@ -1,10 +1,48 @@
-document.addEventListener('DOMContentLoaded', init);
+// ==============================
+// 1. グローバル変数と定数
+// ==============================
+// APIのベースURLを設定
+const API_BASE_URL = 'http://localhost:3000';
 
-// 初期化関数
-async function init() {
-  setupEventListeners();
-  await displayProjects();
+// グローバルスコープで socket 変数を定義
+let socket;
+
+
+// ==============================
+// 2. ヘルパー関数
+// ==============================
+// JSONを取得する汎用関数
+async function fetchJSON(url) {
+  const response = await fetch(`${API_BASE_URL}${url}`);
+  if (!response.ok) throw new Error(`Failed to fetch ${url}`);
+  return await response.json();
 }
+
+// 画像を取得する汎用関数
+async function fetchImage(url) {
+  const response = await fetch(`${API_BASE_URL}${url}`);
+  if (!response.ok) throw new Error(`Failed to fetch image at ${url}`);
+  const blob = await response.blob();
+
+  const img = document.createElement('img');
+  img.src = URL.createObjectURL(blob);
+  img.style.width = '100%';
+  img.style.height = '100%';
+  img.style.objectFit = 'cover';
+
+  return img;
+}
+
+// 要素の表示・非表示を切り替える関数
+function toggleElementDisplay(element) {
+  element.style.display = element.style.display === 'block' ? 'none' : 'block';
+}
+
+
+// ==============================
+// 3. データ取得と表示
+// ==============================
+// プロジェクト一覧を表示する関数
 
 // プロジェクト一覧を表示する関数
 async function displayProjects() {
@@ -36,26 +74,6 @@ async function displayProjects() {
   }
 }
 
-// プロジェクトカードを作成する関数
-function createProjectCard(project) {
-  const projectCard = document.createElement('div');
-  projectCard.classList.add('card');
-  projectCard.dataset.projectId = project.name;
-
-  const imagePlaceholder = document.createElement('div');
-  imagePlaceholder.classList.add('image-placeholder');
-  projectCard.appendChild(imagePlaceholder);
-
-  const projectName = document.createElement('p');
-  projectName.textContent = project.name;
-  projectCard.appendChild(projectName);
-
-  projectCard.addEventListener('click', () => {
-    window.location.href = `/project/${project.name}`;
-  });
-
-  return projectCard;
-}
 
 // サムネイル画像を取得して表示する関数
 async function getThumbnailImage(projectPath, imageContainer) {
@@ -100,27 +118,61 @@ async function displayImage(projectPath, labelName, imageName, imageContainer) {
   }
 }
 
-// JSONを取得する汎用関数
-async function fetchJSON(url) {
-  const response = await fetch(`${API_BASE_URL}${url}`);
-  if (!response.ok) throw new Error(`Failed to fetch ${url}`);
-  return await response.json();
+// プロジェクト一覧を更新する関数
+async function updateProjects() {
+  try {
+    const projectsContainer = document.querySelector('.project-list');
+    if (!projectsContainer) {
+      console.error('プロジェクトリストの要素が見つかりません');
+      return;
+    }
+
+    const projectList = await fetchJSON('/directory?path=projects');
+    projectsContainer.innerHTML = ''; // プロジェクト一覧をクリア
+
+    // Promise.all を使用して、各プロジェクトのサムネイル画像取得を並行処理
+    await Promise.all(
+      projectList
+        .filter(project => project.isDirectory)
+        .map(async project => {
+          const projectCard = createProjectCard(project);
+          projectsContainer.appendChild(projectCard);
+
+          // サムネイル画像取得処理
+          await getThumbnailImage(`/projects/${project.name}`, projectCard.querySelector('.image-placeholder'));
+        })
+    );
+  } catch (error) {
+    console.error('プロジェクト一覧の取得に失敗しました', error);
+    showNotification('プロジェクト一覧の取得に失敗しました。');
+  }
 }
 
-// 画像を取得する汎用関数
-async function fetchImage(url) {
-  const response = await fetch(`${API_BASE_URL}${url}`);
-  if (!response.ok) throw new Error(`Failed to fetch image at ${url}`);
-  const blob = await response.blob();
 
-  const img = document.createElement('img');
-  img.src = URL.createObjectURL(blob);
-  img.style.width = '100%';
-  img.style.height = '100%';
-  img.style.objectFit = 'cover';
-
-  return img;
-}
+// ==============================
+// 4. DOM操作とイベントリスナー
+// ==============================
+// プロジェクトカードを作成する関数
+function createProjectCard(project) {
+    const projectCard = document.createElement('div');
+    projectCard.classList.add('card');
+    projectCard.dataset.projectId = project.name;
+  
+    const imagePlaceholder = document.createElement('div');
+    imagePlaceholder.classList.add('image-placeholder');
+    projectCard.appendChild(imagePlaceholder);
+  
+    const projectName = document.createElement('p');
+    projectName.textContent = project.name;
+    projectCard.appendChild(projectName);
+  
+    projectCard.addEventListener('click', () => {
+      window.location.href = `/project/${project.name}`;
+    });
+  
+    return projectCard;
+  }
+  
 
 // イベントリスナーをセットアップする関数
 function setupEventListeners() {
@@ -172,37 +224,6 @@ function handleImageMouseOut(event) {
     imageNameSpan.style.display = 'none';
   }
 }
-
-// 新しいプロジェクトを作成する関数
-async function createNewProject() {
-  const newProjectNameInput = document.getElementById('newProjectName');
-  const createProjectForm = document.querySelector('.create-project-form');
-  const newProjectName = newProjectNameInput.value.trim();
-
-  if (!newProjectName) {
-    alert('プロジェクト名を入力してください');
-    return;
-  }
-
-  try {
-    const response = await fetch('/project/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectName: newProjectName })
-    });
-
-    if (!response.ok) throw new Error('プロジェクトの作成に失敗しました');
-
-    alert('プロジェクトが作成されました');
-    await displayProjects();
-    newProjectNameInput.value = '';
-    createProjectForm.style.display = 'none';
-  } catch (error) {
-    console.error('プロジェクトの作成に失敗しました', error);
-    alert('プロジェクトの作成に失敗しました');
-  }
-}
-
 // コンテンツを切り替える関数
 function switchContent(content) {
   const projectLink = document.getElementById('projectLink');
@@ -223,10 +244,65 @@ function switchContent(content) {
   }
 }
 
-// 要素の表示・非表示を切り替える関数
-function toggleElementDisplay(element) {
-  element.style.display = element.style.display === 'block' ? 'none' : 'block';
-}
 
-// APIのベースURLを設定
-const API_BASE_URL = 'http://localhost:3000'; 
+
+// ==============================
+// 5. プロジェクト操作
+// ==============================
+
+// 新しいプロジェクトを作成する関数
+async function createNewProject() {
+    const newProjectNameInput = document.getElementById('newProjectName');
+    const createProjectForm = document.querySelector('.create-project-form');
+    const newProjectName = newProjectNameInput.value.trim();
+  
+    if (!newProjectName) {
+      alert('プロジェクト名を入力してください');
+      return;
+    }
+  
+    try {
+      // プロジェクト作成イベントをサーバーに送信
+      socket.emit('createProject', newProjectName);
+  
+      // サーバーからのレスポンスを待つ
+      await new Promise((resolve, reject) => {
+        socket.on('createProjectSuccess', (data) => {
+          console.log(data.message);
+          resolve(); // 成功したら Promise を解決
+        });
+  
+        socket.on('createProjectError', (data) => {
+          handleError(data.error, data.details);
+          reject(new Error(data.error)); // 失敗したら Promise を拒否
+        });
+      });
+  
+      await displayProjects();
+      newProjectNameInput.value = '';
+      createProjectForm.style.display = 'none';
+    } catch (error) {
+      console.error('プロジェクトの作成に失敗しました', error);
+      alert('プロジェクトの作成に失敗しました');
+    }
+}
+  
+
+
+
+// ==============================
+// 7. 初期化
+// ==============================
+document.addEventListener('DOMContentLoaded', init);
+
+// 初期化関数
+async function init() {
+    socket = io('http://localhost:3000'); // サーバーに接続
+     // プロジェクトデータ変更イベント
+     socket.on('project-data-changed', () => {
+      updateProjects(); // プロジェクト一覧を更新
+    });
+    
+    setupEventListeners();
+    await displayProjects();
+}

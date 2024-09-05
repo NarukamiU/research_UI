@@ -1,240 +1,310 @@
-// DOMContentLoaded イベント発生時の初期化処理
+// ==============================
+// 1. グローバル変数と定数
+// ==============================
+// APIのベースURLを設定
+const API_BASE_URL = 'http://localhost:3000';
+
+// グローバルスコープで socket 変数を定義
+let socket;
+
+
+// ==============================
+// 2. ヘルパー関数
+// ==============================
+// JSONを取得する汎用関数
+async function fetchJSON(url) {
+  const response = await fetch(`${API_BASE_URL}${url}`);
+  if (!response.ok) throw new Error(`Failed to fetch ${url}`);
+  return await response.json();
+}
+
+// 画像を取得する汎用関数
+async function fetchImage(url) {
+  const response = await fetch(`${API_BASE_URL}${url}`);
+  if (!response.ok) throw new Error(`Failed to fetch image at ${url}`);
+  const blob = await response.blob();
+
+  const img = document.createElement('img');
+  img.src = URL.createObjectURL(blob);
+  img.style.width = '100%';
+  img.style.height = '100%';
+  img.style.objectFit = 'cover';
+
+  return img;
+}
+
+// 要素の表示・非表示を切り替える関数
+function toggleElementDisplay(element) {
+  element.style.display = element.style.display === 'block' ? 'none' : 'block';
+}
+
+
+// ==============================
+// 3. データ取得と表示
+// ==============================
+// プロジェクト一覧を表示する関数
+
+// プロジェクト一覧を表示する関数
+async function displayProjects() {
+  try {
+    const projectsContainer = document.querySelector('.project-list');
+    if (!projectsContainer) {
+      console.error('プロジェクトリストの要素が見つかりません');
+      return;
+    }
+
+    const projectList = await fetchJSON('/directory?path=projects');
+    projectsContainer.innerHTML = ''; // プロジェクト一覧をクリア
+
+    // Promise.all を使用して、各プロジェクトのサムネイル画像取得を並行処理
+    await Promise.all(
+      projectList
+        .filter(project => project.isDirectory)
+        .map(async project => {
+          const projectCard = createProjectCard(project);
+          projectsContainer.appendChild(projectCard);
+
+          // サムネイル画像取得処理
+          await getThumbnailImage(`/projects/${project.name}`, projectCard.querySelector('.image-placeholder'));
+        })
+    );
+  } catch (error) {
+    console.error('プロジェクト一覧の取得に失敗しました', error);
+    showNotification('プロジェクト一覧の取得に失敗しました。');
+  }
+}
+
+
+// サムネイル画像を取得して表示する関数
+async function getThumbnailImage(projectPath, imageContainer) {
+  try {
+    const directoryList = await fetchJSON(`/directory?path=${projectPath}`);
+
+    for (const item of directoryList) {
+      if (item.isDirectory) {
+        // ディレクトリ内の画像ファイルを取得
+        const imageList = await fetchJSON(`/directory?path=${projectPath}/${item.name}`);
+        
+        const selectedImage = imageList.find(image => !image.isDirectory);
+        if (selectedImage) {
+          displayImage(projectPath, item.name, selectedImage.name, imageContainer);
+          return; // 最初に見つけた画像を表示して終了
+        }
+      } else if (!item.isDirectory) {
+        // プロジェクトルートに画像がある場合
+        displayImage(projectPath, '', item.name, imageContainer);
+        return; // 最初に見つけた画像を表示して終了
+      }
+    }
+
+    console.warn('プロジェクト内に画像が見つかりませんでした');
+  } catch (error) {
+    console.error('サムネイル画像の取得に失敗しました', error);
+  }
+}
+
+
+// 画像を表示する関数
+async function displayImage(projectPath, labelName, imageName, imageContainer) {
+  try {
+    const imageUrl = `/images?path=${projectPath}/${labelName}/${imageName}`;
+    const img = await fetchImage(imageUrl);
+
+    imageContainer.innerHTML = ''; // 既存の画像をクリア
+    imageContainer.appendChild(img);
+  } catch (error) {
+    console.error('画像の取得に失敗しました', error);
+    alert('画像の取得に失敗しました');
+  }
+}
+
+// プロジェクト一覧を更新する関数
+async function updateProjects() {
+  try {
+    const projectsContainer = document.querySelector('.project-list');
+    if (!projectsContainer) {
+      console.error('プロジェクトリストの要素が見つかりません');
+      return;
+    }
+
+    const projectList = await fetchJSON('/directory?path=projects');
+    projectsContainer.innerHTML = ''; // プロジェクト一覧をクリア
+
+    // Promise.all を使用して、各プロジェクトのサムネイル画像取得を並行処理
+    await Promise.all(
+      projectList
+        .filter(project => project.isDirectory)
+        .map(async project => {
+          const projectCard = createProjectCard(project);
+          projectsContainer.appendChild(projectCard);
+
+          // サムネイル画像取得処理
+          await getThumbnailImage(`/projects/${project.name}`, projectCard.querySelector('.image-placeholder'));
+        })
+    );
+  } catch (error) {
+    console.error('プロジェクト一覧の取得に失敗しました', error);
+    showNotification('プロジェクト一覧の取得に失敗しました。');
+  }
+}
+
+
+// ==============================
+// 4. DOM操作とイベントリスナー
+// ==============================
+// プロジェクトカードを作成する関数
+function createProjectCard(project) {
+    const projectCard = document.createElement('div');
+    projectCard.classList.add('card');
+    projectCard.dataset.projectId = project.name;
+  
+    const imagePlaceholder = document.createElement('div');
+    imagePlaceholder.classList.add('image-placeholder');
+    projectCard.appendChild(imagePlaceholder);
+  
+    const projectName = document.createElement('p');
+    projectName.textContent = project.name;
+    projectCard.appendChild(projectName);
+  
+    projectCard.addEventListener('click', () => {
+      window.location.href = `/project/${project.name}`;
+    });
+  
+    return projectCard;
+  }
+  
+
+// イベントリスナーをセットアップする関数
+function setupEventListeners() {
+  const imageGrid = document.getElementById('imageGrid');
+  if (imageGrid) {
+    imageGrid.addEventListener('mouseover', handleImageMouseOver);
+    imageGrid.addEventListener('mouseout', handleImageMouseOut);
+  }
+
+  const newProjectButton = document.getElementById('newProjectButton');
+  const createNewProjectButton = document.getElementById('createNewProjectButton');
+  const createProjectForm = document.querySelector('.create-project-form');
+
+  newProjectButton.addEventListener('click', () => {
+    toggleElementDisplay(createProjectForm);
+  });
+
+  createNewProjectButton.addEventListener('click', createNewProject);
+
+  const hamburgerMenu = document.getElementById('hamburgerMenu');
+  const menu = document.getElementById('menu');
+  hamburgerMenu.addEventListener('click', () => {
+    toggleElementDisplay(menu);
+  });
+
+  const projectLink = document.getElementById('projectLink');
+  const settingLink = document.getElementById('settingLink');
+  const homeLink = document.getElementById('homeLink');
+
+  projectLink.addEventListener('click', () => switchContent('project'));
+  settingLink.addEventListener('click', () => switchContent('setting'));
+  homeLink.addEventListener('click', () => { window.location.href = '/'; });
+}
+
+// 画像のホバーイベント処理
+function handleImageMouseOver(event) {
+  const imageCard = event.target.closest('.image-card');
+  if (imageCard) {
+    const imageNameSpan = imageCard.querySelector('.image-name');
+    imageNameSpan.textContent = imageCard.dataset.imageName;
+    imageNameSpan.style.display = 'block';
+  }
+}
+
+function handleImageMouseOut(event) {
+  const imageCard = event.target.closest('.image-card');
+  if (imageCard) {
+    const imageNameSpan = imageCard.querySelector('.image-name');
+    imageNameSpan.style.display = 'none';
+  }
+}
+// コンテンツを切り替える関数
+function switchContent(content) {
+  const projectLink = document.getElementById('projectLink');
+  const settingLink = document.getElementById('settingLink');
+  const projectContentDiv = document.getElementById('projectContent');
+  const settingContentDiv = document.getElementById('settingContent');
+
+  if (content === 'project') {
+    projectLink.classList.add('active');
+    settingLink.classList.remove('active');
+    projectContentDiv.style.display = 'block';
+    settingContentDiv.style.display = 'none';
+  } else {
+    projectLink.classList.remove('active');
+    settingLink.classList.add('active');
+    projectContentDiv.style.display = 'none';
+    settingContentDiv.style.display = 'block';
+  }
+}
+
+
+
+// ==============================
+// 5. プロジェクト操作
+// ==============================
+
+// 新しいプロジェクトを作成する関数
+async function createNewProject() {
+    const newProjectNameInput = document.getElementById('newProjectName');
+    const createProjectForm = document.querySelector('.create-project-form');
+    const newProjectName = newProjectNameInput.value.trim();
+  
+    if (!newProjectName) {
+      alert('プロジェクト名を入力してください');
+      return;
+    }
+  
+    try {
+      // プロジェクト作成イベントをサーバーに送信
+      socket.emit('createProject', newProjectName);
+  
+      // サーバーからのレスポンスを待つ
+      await new Promise((resolve, reject) => {
+        socket.on('createProjectSuccess', (data) => {
+          console.log(data.message);
+          resolve(); // 成功したら Promise を解決
+        });
+  
+        socket.on('createProjectError', (data) => {
+          handleError(data.error, data.details);
+          reject(new Error(data.error)); // 失敗したら Promise を拒否
+        });
+      });
+  
+      await displayProjects();
+      newProjectNameInput.value = '';
+      createProjectForm.style.display = 'none';
+    } catch (error) {
+      console.error('プロジェクトの作成に失敗しました', error);
+      alert('プロジェクトの作成に失敗しました');
+    }
+}
+  
+
+
+
+// ==============================
+// 7. 初期化
+// ==============================
 document.addEventListener('DOMContentLoaded', init);
 
 // 初期化関数
 async function init() {
-  setupImageHoverEvents();
-  await displayEachImages();
-  setupEventListeners();
-
-  // カスタムイベントリスナーを設定
-  document.addEventListener('image-data-changed', async () => {
-    updateImageCount();
-    await displayEachImages();
-  });
-};
-
-// 共通のエラーハンドリング関数
-function handleError(error, message) {
-  console.error(error);
-  alert(message);
-}
-
-// 共通のリクエスト送信関数
-async function sendRequest(url, method, data, errorMessage) {
-  try {
-    const response = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+    socket = io('http://localhost:3000'); // サーバーに接続
+     // プロジェクトデータ変更イベント
+     socket.on('project-data-changed', () => {
+      updateProjects(); // プロジェクト一覧を更新
     });
-
-    if (!response.ok) {
-      throw new Error(errorMessage);
-    }
-
-    const responseData = await response.json();
-    console.log(responseData.message);
-    return responseData;
-  } catch (error) {
-    handleError(error, errorMessage);
-    throw error;
-  }
-}
-
-// ラベル削除ボタンのクリックイベント
-async function handleLabelDeleteClick(event) {
-  const { projectName, labelName } = event.target.dataset;
-  const labelContainer = event.target.closest('.label-container');
-
-  try {
-    await sendRequest(
-      '/label/delete',
-      'DELETE',
-      { projectName, labelName },
-      'ラベルの削除に失敗しました'
-    );
-
-    // ラベルコンテナをDOMから削除
-    labelContainer.remove();
-
-    // カスタムイベントを発行
-    document.dispatchEvent(new Event('image-data-changed'));
-  } catch (error) {
-    handleError(error, 'ラベルの削除に失敗しました');
-  }
-}
-
-// DELETEボタンのクリックイベント
-async function handleDeleteButtonClick(event) {
-  const projectName = document.getElementById("projectLink").textContent.trim();
-  const selectedImageCards = document.querySelectorAll('.image-card.selected');
-
-  try {
-    // 選択されたすべての画像カードを削除
-    await Promise.all(
-      Array.from(selectedImageCards).map(async (imageCard) => {
-        const { imageName, labelName } = imageCard.dataset;
-        await sendRequest(
-          '/delete',
-          'DELETE',
-          { projectName, imageName, labelName },
-          '画像の削除に失敗しました'
-        );
-        imageCard.remove();
-      })
-    );
     
-    // カスタムイベントを発行
-    document.dispatchEvent(new Event('image-data-changed'));
-  } catch (error) {
-    handleError(error, '画像の削除に失敗しました');
-  }
+    setupEventListeners();
+    await displayProjects();
 }
-
-// 画像総数を更新する関数
-function updateImageCount() {
-  const imageListTitle = document.querySelector('.image-list-title');
-  const totalImages = document.querySelectorAll('.image-card').length;
-  imageListTitle.textContent = `ALL (${totalImages} images)`;
-}
-
-// ラベルの画像数を更新する関数
-function updateLabelImageCount(labelName) {
-  const labelNameElement = document.querySelector(`.label-container[data-label-id="${labelName}"] .label-name`);
-  const labelImages = document.querySelectorAll(`.image-card[data-label-name="${labelName}"]`).length;
-  labelNameElement.textContent = `${labelName} (${labelImages} images)`;
-}
-
-// ラベルをクリックした時のイベントリスナー
-function handleLabelClick(event) {
-  const labelElement = event.target;
-  const imageCard = labelElement.closest('.image-card'); 
-
-  // 既に展開されているラベルリストコンテナを取得
-  const existingLabelListContainer = document.querySelector('.label-list-container');
   
-  // 既存のコンテナが存在し、クリックされたラベル要素の親要素でない場合は、既存のコンテナを削除
-  if (existingLabelListContainer && existingLabelListContainer.parentNode !== labelElement.parentNode) {
-    existingLabelListContainer.remove();
-  }
-
-  // 既存のラベルリストコンテナを削除
-  const currentLabelListContainer = labelElement.parentNode.querySelector('.label-list-container');
-  if (currentLabelListContainer) {
-    currentLabelListContainer.remove();
-    return; // 既存のコンテナを削除したら関数を終了
-  }
-
-  // 新しいラベルリストコンテナを作成
-  const labelListContainer = document.createElement('div');
-  labelListContainer.classList.add('label-list-container');
-
-  // 現在のラベル名を取得
-  const currentLabel = labelElement.textContent;
-
-  // ラベルリストを取得
-  const projectName = document.getElementById("projectLink").textContent.trim();
-  const projectPath = `/projects/${projectName}`;
-  fetch(`http://localhost:3000/directory?path=${projectPath}`)
-    .then(response => response.json())
-    .then(labelList => {
-      // 現在のラベル以外のラベルをリストに追加
-      labelList.forEach(label => {
-        if (label.isDirectory && label.name !== currentLabel) {
-          const labelItem = document.createElement('div');
-          labelItem.classList.add('label-item');
-          labelItem.textContent = label.name;
-          labelItem.dataset.labelName = label.name;
-          labelItem.addEventListener('click', handleLabelItemClick);
-          labelListContainer.appendChild(labelItem);
-        }
-      });
-
-      // ラベル要素と image-grid-inner 要素の位置を取得
-      const labelRect = labelElement.getBoundingClientRect();
-      const imageGridInnerRect = imageCard.parentNode.getBoundingClientRect();
-
-      // ラベルリストコンテナの位置を設定 (image-grid-inner を基準とした相対位置)
-      labelListContainer.style.top = `${labelRect.bottom - imageGridInnerRect.top}px`;
-      labelListContainer.style.left = `${labelRect.left - imageGridInnerRect.left}px`;
-
-      // ラベル要素の親要素 (image-grid-inner) にラベルリストコンテナを追加
-      imageCard.parentNode.appendChild(labelListContainer);
-
-      document.addEventListener('click', (event) => {
-        if (!labelListContainer.contains(event.target) && !labelElement.contains(event.target)) {
-          labelListContainer.remove();
-        }
-      });
-    })
-    .catch(error => {
-      console.error('ラベルの取得中にエラーが発生しました:', error);
-    });
-}
-
-// ラベル項目クリック時のイベントリスナー
-async function handleLabelItemClick(event) {
-  const selectedImageCards = document.querySelectorAll('.image-card.selected');
-  const targetLabel = event.target.dataset.labelName;
-  const projectName = document.getElementById("projectLink").textContent.trim();
-
-  try {
-    // 選択されたすべての画像カードを移動
-    await Promise.all(
-      Array.from(selectedImageCards).map(async (imageCard) => {
-        const { imageName, labelName: sourceLabel } = imageCard.dataset;
-
-        // 移動先のラベルと画像の現在のラベルが異なる場合のみ移動処理を行う
-        if (sourceLabel !== targetLabel) { 
-          await moveImage(projectName, imageName, sourceLabel, targetLabel);
-
-          // 移動後のラベルを表示
-          const labelSpan = imageCard.querySelector('.image-label');
-          labelSpan.textContent = targetLabel;
-          labelSpan.style.display = 'none'; // ラベルを非表示にする
-          imageCard.dataset.labelName = targetLabel; // data-label-name 属性も更新
-
-          // 画像カードを新しいラベルコンテナに移動
-          const targetLabelContainer = document.querySelector(`.label-container[data-label-id="${targetLabel}"] .image-grid-inner`);
-          targetLabelContainer.appendChild(imageCard);
-        }
-      })
-    );
-
-    // カスタムイベントを発行
-    document.dispatchEvent(new Event('image-data-changed'));
-  } catch (error) {
-    handleError(error, '画像の移動に失敗しました');
-  }
-}
-
-// 画像を移動する関数
-async function moveImage(projectName, imageName, sourceLabel, targetLabel) {
-  await sendRequest(
-    '/move',
-    'PUT',
-    { projectName, imageName, sourceLabel, targetLabel },
-    '画像の移動に失敗しました'
-  );
-}
-
-// 画像を表示する関数
-async function displayImage(imagePath, labelName, imageName, imageContainer) {
-  try {
-    const response = await fetch(`http://localhost:3000/images?path=${imagePath}/${labelName}/${imageName}`);
-    const blob = await response.blob();
-
-    const img = document.createElement('img');
-    img.src = URL.createObjectURL(blob);
-    img.style.width = '100%';
-    img.style.height = '100%';
-    img.style.objectFit = 'cover';
-
-    imageContainer.innerHTML = ''; 
-    imageContainer.appendChild(img);
-
-  } catch (error) {
-    handleError(error, '画像の取得に失敗しました');
-  }
-}
+  

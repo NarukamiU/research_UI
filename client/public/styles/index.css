@@ -4,26 +4,24 @@ body {
   padding: 0;
   display: flex;
   background-color: #d9d9d9;
-  color: #333;
 }
 
 .sidebar {
-  width: 220px;
+  width: 200px;
   background-color: #bbbbbb;
   padding: 20px;
   height: 100vh;
   box-sizing: border-box;
-  position: relative;
-  color: #fff;
+  position: fixed;
 }
+
 
 .hamburger-menu {
   cursor: pointer;
-  font-size: 28px;
+  font-size: 24px;
   position: absolute;
   top: 10px;
   left: 10px;
-  color:#000
 }
 
 .active {
@@ -98,10 +96,10 @@ body {
 }
 
 .content {
-  flex-grow: 1;
   padding: 20px;
   box-sizing: border-box;
-  
+  flex-grow: 1;
+  margin-left: 200px; /* sidebar の幅分だけ左マージンを設定 */
 }
 
 h1 {

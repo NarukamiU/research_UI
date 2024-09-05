@@ -1,12 +1,12 @@
 const express = require('express');
 const cors = require('cors');
-const multer = require('multer');
 const fs = require('fs-extra'); 
 const path = require('path');
 const ejs = require('ejs'); // EJSをインポート
 const { v4: uuidv4 } = require('uuid'); 
 const app = express();
 const port = 3000;
+
 
 const http = require('http'); // http モジュールを require
 const server = http.createServer(app); // HTTP サーバーを作成
@@ -19,33 +19,239 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
 }
 
-// ファイルアップロード設定
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const targetDirectory = req.body.path || '';
-    const targetPath = path.join(uploadDir, targetDirectory); 
-    cb(null, targetPath);
-  },
-  filename: (req, file, cb) => {
-    cb(null, file.originalname); // 元のファイル名を使用
-  }
-});
+io.on('connection', (socket) => {
+  console.log('クライアントが接続しました');
 
-const upload = multer({ 
-  storage: storage,
-  // ファイルタイプを制限する fileFilter オプションを追加
-  fileFilter: (req, file, cb) => {
-    // 許可する MIME タイプ
-    const allowedMimeTypes = ['image/jpeg', 'image/png','image/webp'];
+  // 画像アップロードイベント
+  socket.on('upload', async (data) => {
+  const { projectName, labelName, fileData, fileName } = data; 
+  const uploadPath = path.join(uploadDir, 'projects', projectName, labelName);
 
-    // ファイルタイプが許可されている場合は cb(null, true) を呼び出す
-    if (allowedMimeTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      // 許可されていない場合はエラーメッセージを設定して cb(null, false) を呼び出す
-      cb(new Error('アップロードできるのは画像ファイルのみです。'), false);
+    try {
+      // アップロード先ディレクトリが存在しない場合は作成
+      await fs.ensureDir(uploadPath);
+
+      // ファイル名を UUID に変更
+      const fileExtension = path.extname(fileName); // 拡張子を取得
+      const newFileName = `${uuidv4()}${fileExtension}`; 
+      // ファイルを保存 (Blob データを直接保存)
+      const filePath = path.join(uploadPath, newFileName);
+      await fs.writeFile(filePath, fileData); 
+      // 成功メッセージをクライアントに送信
+      socket.emit('uploadSuccess', { message: 'ファイルアップロード成功', fileName: newFileName });
+      }
+    catch (err) {
+      console.error('ファイルアップロードエラー:', err);
+      socket.emit('uploadError', { error: 'ファイルアップロード失敗', details: err.message });
+      }
+  });
+  
+  socket.on('uploadComp',() => {
+    // 画像データが変更されたことを通知
+    io.emit('image-data-changed');
+  })
+
+
+   // 画像移動イベント
+   socket.on('moveImage', async (data) => {
+    const { projectName, imageName, sourceLabel, targetLabel } = data;
+
+    // パスチェック
+    const sourcePath = path.join(uploadDir, 'projects', projectName, sourceLabel, imageName);
+    const targetPath = path.join(uploadDir, 'projects', projectName, targetLabel, imageName);
+
+    if (!sourcePath.startsWith(uploadDir) || !targetPath.startsWith(uploadDir)) {
+      return socket.emit('moveImageError', { error: '不正なパスです' });
     }
-  } 
+
+    try {
+      // sourcePath のファイルが存在するかチェック
+      if (!fs.existsSync(sourcePath)) {
+        return socket.emit('moveImageError', { error: '画像が見つかりません' });
+      }
+
+      // targetPath のフォルダが存在するかチェック
+      if (!fs.existsSync(path.dirname(targetPath))) {
+        await fs.mkdir(path.dirname(targetPath));
+      }
+
+      // 画像を移動
+      await fs.move(sourcePath, targetPath);
+
+      // 成功メッセージをクライアントに送信
+      socket.emit('moveImageSuccess', { message: '画像が移動されました' });
+    } catch (err) {
+      console.error('画像移動エラー:', err);
+      socket.emit('moveImageError', { error: '画像の移動に失敗しました', details: err.message });
+    }
+  });
+
+  // 画像移動完了イベント
+  socket.on('moveImageComp', () => {
+    // 画像データが変更されたことを通知
+    io.emit('image-data-changed'); 
+  });
+
+   // 画像削除イベント
+   socket.on('deleteImage', async (data) => {
+    const { projectName, imageName, labelName } = data;
+
+    // パスチェック
+    const filePath = path.join(uploadDir, 'projects', projectName, labelName, imageName);
+
+    if (!filePath.startsWith(uploadDir)) {
+      return socket.emit('deleteImageError', { error: '不正なパスです' });
+    }
+
+    try {
+      // ファイルが存在するかチェック
+      if (!fs.existsSync(filePath)) {
+        return socket.emit('deleteImageError', { error: 'ファイルが見つかりません' });
+      }
+
+      // ファイルを削除
+      await fs.unlink(filePath);
+
+      // 成功メッセージをクライアントに送信
+      socket.emit('deleteImageSuccess', { message: 'ファイル削除成功' });
+    } catch (err) {
+      console.error('ファイル削除エラー:', err);
+      socket.emit('deleteImageError', { error: 'ファイル削除失敗', details: err.message });
+    }
+  });
+
+  // 画像削除完了イベント
+  socket.on('deleteImageComp', () => {
+    // 画像データが変更されたことを通知
+    io.emit('image-data-changed'); 
+  });
+
+  // プロジェクト作成イベント
+  socket.on('createProject', async (projectName) => {
+    const projectDir = path.join(uploadDir, 'projects', projectName);
+
+    try {
+      await fs.mkdir(projectDir);
+      socket.emit('createProjectSuccess', { message: 'プロジェクトが作成されました' });
+      // プロジェクトデータ変更イベント
+      io.emit('project-data-changed'); // クライアントにプロジェクトデータ変更イベントを送信
+    } catch (err) {
+      console.error('プロジェクト作成エラー:', err);
+      socket.emit('createProjectError', { error: 'プロジェクトの作成に失敗しました', details: err.message });
+    }
+  });
+
+  
+
+  // ラベル作成イベント
+  socket.on('createLabel', async (data) => {
+    const { projectName, labelName } = data;
+
+    // パスチェック
+    const labelDir = path.join(uploadDir, 'projects', projectName, labelName);
+
+    if (!labelDir.startsWith(uploadDir)) {
+      return socket.emit('createLabelError', { error: '不正なパスです' });
+    }
+
+    try {
+      // ラベル名が既に存在する場合はエラーを返す
+      if (fs.existsSync(labelDir)) {
+        return socket.emit('createLabelError', { error: 'ラベル名が既に存在します' });
+      }
+
+      // ラベルフォルダを作成
+      await fs.mkdir(labelDir);
+
+      // 成功メッセージをクライアントに送信
+      socket.emit('createLabelSuccess', { message: 'ラベルが作成されました' });
+
+      // 画像データが変更されたことを通知
+      io.emit('image-data-changed');
+    } catch (err) {
+      console.error('ラベル作成エラー:', err);
+      socket.emit('createLabelError', { error: 'ラベルの作成に失敗しました', details: err.message });
+    }
+  });
+
+  // ラベル削除イベント
+  socket.on('deleteLabel', async (data) => {
+    const { projectName, labelName } = data;
+
+    // パスチェック
+    const labelDir = path.join(uploadDir, 'projects', projectName, labelName);
+
+    if (!labelDir.startsWith(uploadDir)) {
+      return socket.emit('deleteLabelError', { error: '不正なパスです' });
+    }
+
+    try {
+      // フォルダが存在するかチェック
+      if (!fs.existsSync(labelDir)) {
+        return socket.emit('deleteLabelError', { error: 'ラベルが見つかりません' });
+      }
+
+      // ラベルフォルダを削除
+      await fs.rm(labelDir, { recursive: true });
+
+      // 成功メッセージをクライアントに送信
+      socket.emit('deleteLabelSuccess', { message: 'ラベルが削除されました' });
+
+      // 画像データが変更されたことを通知
+      io.emit('image-data-changed');
+    } catch (err) {
+      console.error('ラベル削除エラー:', err);
+      socket.emit('deleteLabelError', { error: 'ラベルの削除に失敗しました', details: err.message });
+    }
+  });
+
+   // フォルダアップロードイベント
+   socket.on('uploadFolder', async (data) => {
+    const { projectName, originalFolderName, files } = data;
+    let folderName = originalFolderName;
+    let counter = 1;
+    let uploadPath = path.join(uploadDir, 'verification', projectName, folderName);
+
+    try {
+      // アップロード先ディレクトリが存在する場合は、連番を付与してフォルダ名を作成
+      while (fs.existsSync(uploadPath)) {
+        folderName = `${originalFolderName}-${counter}`;
+        uploadPath = path.join(uploadDir, 'verification', projectName, folderName);
+        counter++;
+      }
+
+      // アップロード先ディレクトリを作成
+      await fs.ensureDir(uploadPath);
+
+      // 各ファイルを移動
+      await Promise.all(
+        files.map(async (file) => {
+          const fileData = Buffer.from(new Uint8Array(file.fileData)); // ArrayBuffer から Buffer に変換
+          const destination = path.join(uploadPath, file.fileName);
+          await fs.writeFile(destination, fileData); // Blob データを直接保存
+        })
+      );
+
+      // 成功メッセージをクライアントに送信
+      socket.emit('uploadFolderSuccess', { message: 'フォルダのアップロードに成功しました。', folderName: folderName });
+    } catch (err) {
+      console.error('ファイルアップロードエラー:', err);
+      socket.emit('uploadFolderError', { error: 'フォルダのアップロードに失敗しました。', details: err.message });
+    }
+  });
+
+
+  // 進捗状況を更新して送信する関数
+  let progress = 0;
+  const intervalId = setInterval(() => {
+    if (progress <= 100) {
+      socket.emit('updateProgress', progress);
+      progress++;
+    } else {
+      clearInterval(intervalId); // 100 に達したらインターバルをクリア
+    }
+  }, 1000);
+  
 });
 
 // CORSを許可するミドルウェアを追加
@@ -83,76 +289,6 @@ app.get('/', async (req, res) => {
   }
 });
 
-io.on('connection', (socket) => {
-  console.log('クライアントが接続しました');
-
-  // 画像アップロードイベント
-  socket.on('upload', async (data) => {
-    const { projectName, labelName, fileData, originalFilename } = data;
-    const uploadPath = path.join(uploadDir, 'projects', projectName, labelName);
-
-    try {
-      // UUID を使用してファイル名を生成
-      const fileExtension = path.extname(originalFilename);
-      const filename = `${uuidv4()}${fileExtension}`;
-
-      // アップロード先ディレクトリが存在しない場合は作成
-      await fs.ensureDir(uploadPath);
-
-      // ファイルを保存
-      const filePath = path.join(uploadPath, filename);
-      await fs.writeFile(filePath, fileData); // Base64 デコードは不要
-
-      // 成功メッセージをクライアントに送信
-      socket.emit('uploadSuccess', { message: 'ファイルアップロード成功', fileName: filename });
-
-      // 画像データが変更されたことを通知
-      io.emit('image-data-changed');
-    } catch (err) {
-      console.error('ファイルアップロードエラー:', err);
-      socket.emit('uploadError', { error: 'ファイルアップロード失敗', details: err.message });
-    }
-  });
-
-   // フォルダアップロードイベント
-   socket.on('uploadFolder', async (data) => {
-    const { projectName, originalFolderName, files } = data;
-    let folderName = originalFolderName;
-    let counter = 1;
-    let uploadPath = path.join(uploadDir, 'verification', projectName, folderName);
-
-    // アップロード先ディレクトリが存在する場合は、連番を付与してフォルダ名を作成
-    while (fs.existsSync(uploadPath)) {
-      folderName = `${originalFolderName}-${counter}`;
-      uploadPath = path.join(uploadDir, 'verification', projectName, folderName);
-      counter++;
-    }
-
-    // アップロード先ディレクトリを作成
-    await fs.ensureDir(uploadPath);
-
-    // ファイルを移動 (ファイル名は変更しない)
-    await Promise.all(
-      files.map(async (file) => {
-        const destination = path.join(uploadPath, file.name); // 元のファイル名を使用
-        await fs.writeFile(destination, file.data); // Base64 デコードは不要
-      })
-    );
-
-    socket.emit('uploadFolderSuccess', { message: 'フォルダのアップロードに成功しました。', folderName: folderName });
-
-    // 画像データが変更されたことを通知
-    io.emit('image-data-changed');
-  });
-});
-
-// 進捗状況を返す API
-app.get('/progress', (req, res) => {
-  const progress = 84 // 適当な数値 (0〜100)
-
-  res.json({ progress: progress });
-});
-
 // ディレクトリ一覧取得 API
 app.get('/directory', async (req, res) => {
   const requestedPath = req.query.path;
@@ -180,74 +316,6 @@ app.get('/directory', async (req, res) => {
   } catch (err) {
     console.error('ディレクトリ取得エラー:', err);
     res.status(500).json({ error: 'ディレクトリ取得失敗', details: err.message }); 
-  }
-});
-
-// 画像を移動する API
-app.put('/move', async (req, res) => {
-  const projectName = req.body.projectName;
-  const imageName = req.body.imageName;
-  const targetLabel = req.body.targetLabel;
-  const sourceLabel = req.body.sourceLabel;
-
-  // パスチェック
-  const sourcePath = path.join(uploadDir, 'projects', projectName, sourceLabel, imageName); 
-  const targetPath = path.join(uploadDir, 'projects', projectName, targetLabel, imageName); 
-
-  // uploadDir から外れたパスが指定されている場合はエラーを返す
-  if (!sourcePath.startsWith(uploadDir) || !targetPath.startsWith(uploadDir)) {
-    return res.status(400).json({ error: '不正なパスです' }); 
-  }
-
-  try {
-    // sourcePath のファイルが存在するかチェック
-    if (!fs.existsSync(sourcePath)) {
-      return res.status(404).json({ error: '画像が見つかりません' });
-    }
-
-    // targetPath のフォルダが存在するかチェック
-    if (!fs.existsSync(path.dirname(targetPath))) {
-      await fs.mkdir(path.dirname(targetPath));
-    }
-
-    // 画像を移動
-    await fs.move(sourcePath, targetPath);
-
-    res.json({ message: '画像が移動されました' });
-  } catch (err) {
-    console.error('画像移動エラー:', err);
-    res.status(500).json({ error: '画像の移動に失敗しました', details: err.message }); 
-  }
-});
-
-
-// ファイル削除 API
-app.delete('/delete', async (req, res) => {
-  const projectName = req.body.projectName;
-  const imageName = req.body.imageName;
-  const labelName = req.body.labelName; 
-  
-  // パスチェック
-  const filePath = path.join(uploadDir, 'projects', projectName, labelName, imageName); 
-
-  // uploadDir から外れたパスが指定されている場合はエラーを返す
-  if (!filePath.startsWith(uploadDir)) {
-    return res.status(400).json({ error: '不正なパスです' }); 
-  }
-
-  try {
-    // ファイルが存在するかチェック
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'ファイルが見つかりません' });
-    }
-
-    // ファイルを削除
-    await fs.unlink(filePath);
-
-    res.json({ message: 'ファイル削除成功' });
-  } catch (err) {
-    console.error('ファイル削除エラー:', err);
-    res.status(500).json({ error: 'ファイル削除失敗', details: err.message }); 
   }
 });
 
@@ -293,83 +361,6 @@ app.get('/project/:projectName', async (req, res) => {
   } catch (err) {
     console.error('プロジェクト情報取得エラー:', err);
     res.status(500).json({ error: 'プロジェクト情報取得失敗', details: err.message }); 
-  }
-});
-
-// 新しいプロジェクトを作成する API
-app.post('/project/create', async (req, res) => {
-  const projectName = req.body.projectName;
-
-  const projectDir = path.join(uploadDir, 'projects', projectName);
-
-  try {
-    await fs.mkdir(projectDir);
-    res.json({ message: 'プロジェクトが作成されました' });
-  } catch (err) {
-    console.error('プロジェクト作成エラー:', err);
-    res.status(500).json({ error: 'プロジェクトの作成に失敗しました' });
-  }
-});
-
-
-// 新しいラベルを作成する API
-app.post('/label/create', async (req, res) => {
-  const projectName = req.body.projectName;
-  const labelName = req.body.labelName;
-
-  // パスチェック
-  const labelDir = path.join(uploadDir, 'projects', projectName, labelName);
-
-  // uploadDir から外れたパスが指定されている場合はエラーを返す
-  if (!labelDir.startsWith(uploadDir)) {
-    return res.status(400).json({ error: '不正なパスです' }); 
-  }
-
-  try {
-    // ラベル名が既に存在する場合はエラーを返す
-    if (fs.existsSync(labelDir)) {
-      return res.status(400).json({ error: 'ラベル名が既に存在します' });
-    }
-
-    // ラベルフォルダを作成
-    await fs.mkdir(labelDir);
-
-    res.json({ message: 'ラベルが作成されました' });
-  } catch (err) {
-    console.error('ラベル作成エラー:', err);
-    res.status(500).json({ error: 'ラベルの作成に失敗しました', details: err.message }); 
-  }
-});
-
-
-
-
-// ラベルを削除する API
-app.delete('/label/delete', async (req, res) => {
-  const projectName = req.body.projectName;
-  const labelName = req.body.labelName;
-
-  // パスチェック
-  const labelDir = path.join(uploadDir, 'projects', projectName, labelName);
-
-  // uploadDir から外れたパスが指定されている場合はエラーを返す
-  if (!labelDir.startsWith(uploadDir)) {
-    return res.status(400).json({ error: '不正なパスです' }); 
-  }
-
-  try {
-    // フォルダが存在するかチェック
-    if (!fs.existsSync(labelDir)) {
-      return res.status(404).json({ error: 'ラベルが見つかりません' });
-    }
-
-    // ラベルフォルダを削除
-    await fs.rm(labelDir, { recursive: true });
-
-    res.json({ message: 'ラベルが削除されました' });
-  } catch (err) {
-    console.error('ラベル削除エラー:', err);
-    res.status(500).json({ error: 'ラベルの削除に失敗しました', details: err.message }); 
   }
 });
 
